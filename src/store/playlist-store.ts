@@ -149,52 +149,37 @@ export const usePlaylistStore = create<PlaylistState>()(
         set((state) => {
           const playlistIndex = state.playlists.findIndex((p) => p.id === playlistId);
           if (playlistIndex === -1) {
-            console.error(`Playlist with ID ${playlistId} not found.`);
-            return {}; // Return current state if playlist not found
+            console.error(`[Store] Playlist with ID ${playlistId} not found for adding song ${song.id}.`);
+            return state; // Return current state if playlist not found
           }
 
           const playlist = state.playlists[playlistIndex];
 
-          // Check if song already exists
+          // Check if song already exists using song ID
           const songExists = playlist.songs.some((s) => s.id === song.id);
 
           if (songExists) {
             toast({
               title: 'Song Already Exists',
-              description: `"${song.title}" is already in this playlist.`,
-              variant: 'default', // Use 'default' or omit for non-destructive
+              description: `"${song.title}" is already in the playlist "${playlist.name}".`,
+              variant: 'default',
             });
             songAdded = false;
-            console.warn(`Attempted to add duplicate song ID ${song.id} to playlist ${playlistId}`);
-            return {}; // Return current state if song exists
+            console.warn(`[Store] Attempted to add duplicate song ID ${song.id} to playlist ${playlistId} ("${playlist.name}").`);
+            return state; // Return current state if song exists
           }
 
-          // Safeguard: Ensure uniqueness using a Map during update
-          const updatedSongsMap = new Map<string, Song>();
-          playlist.songs.forEach(s => updatedSongsMap.set(s.id, s));
-          if (updatedSongsMap.has(song.id)) {
-             // This should ideally not be reached if the above check works, but serves as a fallback
-             console.error(`Duplicate song ID ${song.id} detected during Map update for playlist ${playlistId}. Aborting add.`);
-             songAdded = false;
-             return {};
-          }
-          updatedSongsMap.set(song.id, song);
-          const updatedSongs = Array.from(updatedSongsMap.values());
-
-
-          // Add the song if it doesn't exist
-          // const updatedSongs = [...playlist.songs, song];
+          // Add the song
+          const updatedSongs = [...playlist.songs, song];
           const updatedPlaylist = { ...playlist, songs: updatedSongs };
           const updatedPlaylists = [...state.playlists];
           updatedPlaylists[playlistIndex] = updatedPlaylist;
           songAdded = true;
-
-          // Debugging: Log the state of the updated playlist songs
-          // console.log(`Playlist ${playlistId} songs after adding ${song.id}:`, updatedPlaylist.songs.map(s => s.id));
+          console.log(`[Store] Song ID ${song.id} ("${song.title}") added to playlist ${playlistId} ("${playlist.name}").`);
 
           return { playlists: updatedPlaylists };
         });
-        return songAdded; // Return whether the song was actually added
+        return songAdded;
       },
 
       removeSongFromPlaylist: (playlistId, songId) =>
@@ -275,7 +260,7 @@ export const usePlaylistStore = create<PlaylistState>()(
              if (state.currentSong) {
                newCurrentSongIndex = newSongs.findIndex(song => song.id === state.currentSong!.id);
                if (newCurrentSongIndex === -1) {
-                  console.warn("Current song not found after reorder, resetting index.");
+                  console.warn("[Store] Current song not found after reorder, resetting index.");
                   newCurrentSongIndex = -1; // Should ideally not happen
                }
              }
@@ -299,7 +284,7 @@ export const usePlaylistStore = create<PlaylistState>()(
                // this history. It's complex to map correctly. Maybe clear history on reorder when shuffling?
                // Or, keep it, knowing it might lead to unexpected 'previous' songs.
                // For now, let's keep it, but be aware of potential issues.
-               // console.warn("Reordering while shuffling might affect 'previous song' behavior.");
+               // console.warn("[Store] Reordering while shuffling might affect 'previous song' behavior.");
              }
            }
 
@@ -527,7 +512,7 @@ export const usePlaylistStore = create<PlaylistState>()(
 
          // Check if prevIndex is valid after potential history manipulation
          if (prevIndex < 0 || prevIndex >= numSongs) {
-             console.warn("Invalid previous index calculated:", prevIndex);
+             console.warn("[Store] Invalid previous index calculated:", prevIndex);
              if (playerRef.current) playerRef.current.seekTo(0);
              return { currentSongProgress: 0, isPlaying: true }; // Fallback: restart current song
          }
@@ -595,27 +580,48 @@ export const usePlaylistStore = create<PlaylistState>()(
         // Don't persist isInSinglePlayMode, currentSong, index, progress, duration, history, isPlaying
       }),
       onRehydrateStorage: (state) => {
-        console.log("Hydration finished.");
-        return (state, error) => {
+        console.log("[Store] Hydration started...");
+        return (persistedState, error) => {
           if (error) {
-            console.error("An error occurred during hydration:", error);
-          } else if (state) {
-             // Reset transient state on load
-            state.isPlaying = false;
-            state.currentSong = null;
-            state.currentSongIndex = -1;
-            state.playHistory = [];
-            state.currentSongProgress = 0;
-            state.currentSongDuration = 0;
-            state.isInSinglePlayMode = false;
+            console.error("[Store] An error occurred during hydration:", error);
+          } else if (persistedState) {
+            console.log("[Store] Hydration successful. Applying persisted state and resetting transient state.");
+
+            // De-duplicate songs within each playlist from persisted state
+             const dedupedPlaylists = persistedState.playlists.map(playlist => {
+               const uniqueSongs = new Map<string, Song>();
+               playlist.songs.forEach(song => {
+                 if (!uniqueSongs.has(song.id)) {
+                   uniqueSongs.set(song.id, song);
+                 } else {
+                   console.warn(`[Store Rehydrate] Duplicate song ID ${song.id} ("${song.title}") found and removed from playlist ${playlist.id} ("${playlist.name}").`);
+                 }
+               });
+               return { ...playlist, songs: Array.from(uniqueSongs.values()) };
+             });
+
+
+            // Reset transient state
+            persistedState.isPlaying = false;
+            persistedState.currentSong = null;
+            persistedState.currentSongIndex = -1;
+            persistedState.playHistory = [];
+            persistedState.currentSongProgress = 0;
+            persistedState.currentSongDuration = 0;
+            persistedState.isInSinglePlayMode = false;
+            persistedState.playlists = dedupedPlaylists; // Apply de-duplicated playlists
 
             // Ensure activePlaylistId is valid
-             if (state.activePlaylistId && !state.playlists.find(p => p.id === state.activePlaylistId)) {
-                state.activePlaylistId = state.playlists[0]?.id ?? null;
-             } else if (!state.activePlaylistId && state.playlists.length > 0) {
-                 state.activePlaylistId = state.playlists[0].id;
+             if (persistedState.activePlaylistId && !persistedState.playlists.find(p => p.id === persistedState.activePlaylistId)) {
+                persistedState.activePlaylistId = persistedState.playlists[0]?.id ?? null;
+                console.log(`[Store Rehydrate] Active playlist ID was invalid, reset to: ${persistedState.activePlaylistId}`);
+             } else if (!persistedState.activePlaylistId && persistedState.playlists.length > 0) {
+                 persistedState.activePlaylistId = persistedState.playlists[0].id;
+                 console.log(`[Store Rehydrate] Active playlist ID was null, set to first playlist: ${persistedState.activePlaylistId}`);
              }
-            console.log("State rehydrated and transient state reset.");
+            console.log("[Store] State rehydrated and transient state reset complete.");
+          } else {
+             console.log("[Store] No persisted state found.");
           }
         };
       },
