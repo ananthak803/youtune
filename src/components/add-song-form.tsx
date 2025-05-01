@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -16,8 +17,9 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { usePlaylistStore } from '@/store/playlist-store';
-import { getYoutubeVideoMetadata } from '@/services/youtube'; // Assuming this service exists
+import { getYoutubeVideoMetadata } from '@/services/youtube';
 import type { Song } from '@/lib/types';
+import { Play } from 'lucide-react';
 
 const youtubeUrlSchema = z.object({
   url: z.string().url({ message: 'Please enter a valid YouTube URL.' }).refine(
@@ -43,7 +45,9 @@ interface AddSongFormProps {
 export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
   const { toast } = useToast();
   const addSongToPlaylist = usePlaylistStore((state) => state.addSongToPlaylist);
+  const playSingleSong = usePlaylistStore((state) => state.playSingleSong);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPlayNowLoading, setIsPlayNowLoading] = useState(false);
 
   const form = useForm<YoutubeUrlFormValues>({
     resolver: zodResolver(youtubeUrlSchema),
@@ -52,7 +56,49 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
     },
   });
 
-  async function onSubmit(data: YoutubeUrlFormValues) {
+  const extractVideoId = (urlValue: string): string | null => {
+      try {
+        const url = new URL(urlValue);
+        let videoId = '';
+        if (url.hostname === 'youtu.be') {
+          videoId = url.pathname.substring(1).split('/')[0]; // Handle shorts etc.
+        } else if (url.hostname.includes('youtube.com')) {
+          videoId = url.searchParams.get('v') || '';
+          if (!videoId && url.pathname.startsWith('/embed/')) {
+            videoId = url.pathname.split('/')[2];
+          }
+          if (!videoId && url.pathname.startsWith('/shorts/')) {
+            videoId = url.pathname.split('/')[2];
+           }
+        }
+        // Further clean videoId if query params are appended
+        videoId = videoId.split('?')[0];
+        return videoId || null;
+      } catch (error) {
+        console.error("Error parsing URL:", error);
+        return null;
+      }
+  };
+
+  const fetchAndPrepareSong = async (urlValue: string): Promise<Song | null> => {
+    const videoId = extractVideoId(urlValue);
+    if (!videoId) {
+      throw new Error('Could not extract video ID from URL.');
+    }
+
+    const metadata = await getYoutubeVideoMetadata(videoId);
+
+    const song: Song = {
+      id: videoId,
+      title: metadata.title,
+      author: metadata.author,
+      url: urlValue, // Store the original URL or a canonical one
+      thumbnailUrl: metadata.thumbnailUrl,
+    };
+    return song;
+  };
+
+  async function onAddToPlaylist(data: YoutubeUrlFormValues) {
     if (!selectedPlaylistId) {
       toast({
         title: 'No Playlist Selected',
@@ -64,40 +110,14 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
 
     setIsLoading(true);
     try {
-       // Extract video ID (simple extraction, might need refinement)
-      let videoId = '';
-      const url = new URL(data.url);
-      if (url.hostname === 'youtu.be') {
-        videoId = url.pathname.substring(1);
-      } else if (url.hostname.includes('youtube.com')) {
-        videoId = url.searchParams.get('v') || '';
-         if (!videoId && url.pathname.startsWith('/embed/')) {
-          videoId = url.pathname.split('/')[2];
-        }
-        // Add more robust extraction logic if needed for other URL formats
-      }
-
-      if (!videoId) {
-          throw new Error('Could not extract video ID from URL.');
-      }
-
-
-      // Fetch metadata (replace with actual API call if available)
-      const metadata = await getYoutubeVideoMetadata(videoId);
-
-      const newSong: Song = {
-        id: videoId, // Use video ID as song ID for simplicity
-        title: metadata.title,
-        author: metadata.author,
-        url: data.url, // Store the original URL
-        thumbnailUrl: metadata.thumbnailUrl,
-      };
+      const newSong = await fetchAndPrepareSong(data.url);
+      if (!newSong) return; // Error handled within fetchAndPrepareSong via throw
 
       addSongToPlaylist(selectedPlaylistId, newSong);
 
       toast({
         title: 'Song Added',
-        description: `"${metadata.title}" added to the playlist.`,
+        description: `"${newSong.title}" added to the playlist.`,
       });
       form.reset(); // Clear the form
     } catch (error) {
@@ -112,20 +132,58 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
     }
   }
 
+  async function onPlayNow(event: React.MouseEvent<HTMLButtonElement>) {
+     event.preventDefault(); // Prevent form submission if inside form
+     const urlValue = form.getValues('url');
+     const validationResult = youtubeUrlSchema.safeParse({ url: urlValue });
+
+     if (!validationResult.success) {
+        form.setError('url', { type: 'manual', message: validationResult.error.errors[0]?.message || 'Invalid URL' });
+        return;
+     }
+
+    setIsPlayNowLoading(true);
+    try {
+      const songToPlay = await fetchAndPrepareSong(urlValue);
+      if (!songToPlay) return;
+
+      playSingleSong(songToPlay);
+
+      toast({
+        title: 'Playing Now',
+        description: `"${songToPlay.title}"`,
+      });
+      // Optionally clear the form after playing
+      // form.reset();
+    } catch (error) {
+      console.error('Error playing song:', error);
+      toast({
+        title: 'Error Playing Song',
+        description: error instanceof Error ? error.message : 'Could not play the song. Please check the URL and try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPlayNowLoading(false);
+    }
+  }
+
+  const isUrlValid = youtubeUrlSchema.safeParse(form.watch()).success;
+  const isAnyLoading = isLoading || isPlayNowLoading;
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="mb-8 flex items-end gap-4">
+      <form onSubmit={form.handleSubmit(onAddToPlaylist)} className="mb-8 flex flex-wrap items-end gap-2 md:flex-nowrap md:gap-4">
         <FormField
           control={form.control}
           name="url"
           render={({ field }) => (
-            <FormItem className="flex-1">
+            <FormItem className="flex-1 min-w-[200px]">
               <FormLabel>YouTube URL</FormLabel>
               <FormControl>
                 <Input
                   placeholder="Paste a YouTube link here (e.g., https://www.youtube.com/watch?v=...)"
                   {...field}
-                  disabled={isLoading}
+                  disabled={isAnyLoading}
                   aria-label="YouTube URL Input"
                 />
               </FormControl>
@@ -133,9 +191,27 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={isLoading || !selectedPlaylistId} aria-label="Add song to playlist">
-          {isLoading ? 'Adding...' : 'Add Song'}
-        </Button>
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onPlayNow}
+            disabled={isAnyLoading || !isUrlValid}
+            aria-label="Play song now"
+            className="flex-1 md:flex-none"
+          >
+            {isPlayNowLoading ? 'Loading...' : <Play className="mr-2 h-4 w-4" />}
+            Play Now
+          </Button>
+          <Button
+            type="submit"
+            disabled={isAnyLoading || !selectedPlaylistId || !isUrlValid}
+            aria-label="Add song to playlist"
+             className="flex-1 md:flex-none"
+          >
+            {isLoading ? 'Adding...' : 'Add to Playlist'}
+          </Button>
+        </div>
       </form>
     </Form>
   );
