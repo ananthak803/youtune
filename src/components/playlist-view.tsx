@@ -108,7 +108,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
           </TableHeader>
           <TableBody
             onDragOver={handleDragOver} // Apply drag over to the body to detect dropping between rows
-          >
+          >{/* Ensure no whitespace characters are rendered here */}
             {playlist.songs.map((song, index) => (
               <TableRow
                 key={song.id}
@@ -122,7 +122,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
                    currentSong?.id === song.id && 'bg-accent/10',
                    'hover:bg-muted/50' // Ensure hover style remains consistent
                 )}
-              >
+              >{/* Ensure no whitespace characters are rendered here */}
                 <TableCell className="py-2 px-2 w-10 align-middle">
                     <GripVertical className="h-5 w-5 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
                 </TableCell>
