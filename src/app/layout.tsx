@@ -23,6 +23,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
+        // Add suppression here too, as browser extensions might inject attributes directly onto the body
+        suppressHydrationWarning
         className={cn(
           'min-h-screen bg-background font-sans antialiased dark', // Apply dark theme globally
           fontSans.variable
