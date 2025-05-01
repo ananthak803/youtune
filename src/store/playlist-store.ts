@@ -105,8 +105,9 @@ export const usePlaylistStore = create<PlaylistState>()(
           };
           const updatedPlaylists = [...state.playlists, newPlaylist];
           const newStateUpdate: Partial<PlaylistState> = { playlists: updatedPlaylists };
-          if (state.activePlaylistId === null && updatedPlaylists.length === 1) {
-            newStateUpdate.activePlaylistId = newPlaylist.id;
+          // Select the first playlist if none is selected or if it's the only one
+          if (state.activePlaylistId === null || updatedPlaylists.length === 1) {
+              newStateUpdate.activePlaylistId = newPlaylist.id;
           }
           return newStateUpdate;
         }),
@@ -144,41 +145,57 @@ export const usePlaylistStore = create<PlaylistState>()(
         })),
 
       addSongToPlaylist: (playlistId, song) => {
-         let songAdded = false;
-         set((state) => {
-           const playlistIndex = state.playlists.findIndex((p) => p.id === playlistId);
-           if (playlistIndex === -1) {
-               console.error(`Playlist with ID ${playlistId} not found.`);
-               return {}; // Return current state if playlist not found
-           }
+        let songAdded = false;
+        set((state) => {
+          const playlistIndex = state.playlists.findIndex((p) => p.id === playlistId);
+          if (playlistIndex === -1) {
+            console.error(`Playlist with ID ${playlistId} not found.`);
+            return {}; // Return current state if playlist not found
+          }
 
-           const playlist = state.playlists[playlistIndex];
+          const playlist = state.playlists[playlistIndex];
 
-           // Check if song already exists
-           const songExists = playlist.songs.some((s) => s.id === song.id);
+          // Check if song already exists
+          const songExists = playlist.songs.some((s) => s.id === song.id);
 
-           if (songExists) {
-             toast({
-               title: 'Song Already Exists',
-               description: `"${song.title}" is already in this playlist.`,
-               variant: 'default', // Use 'default' or omit for non-destructive
-             });
+          if (songExists) {
+            toast({
+              title: 'Song Already Exists',
+              description: `"${song.title}" is already in this playlist.`,
+              variant: 'default', // Use 'default' or omit for non-destructive
+            });
+            songAdded = false;
+            console.warn(`Attempted to add duplicate song ID ${song.id} to playlist ${playlistId}`);
+            return {}; // Return current state if song exists
+          }
+
+          // Safeguard: Ensure uniqueness using a Map during update
+          const updatedSongsMap = new Map<string, Song>();
+          playlist.songs.forEach(s => updatedSongsMap.set(s.id, s));
+          if (updatedSongsMap.has(song.id)) {
+             // This should ideally not be reached if the above check works, but serves as a fallback
+             console.error(`Duplicate song ID ${song.id} detected during Map update for playlist ${playlistId}. Aborting add.`);
              songAdded = false;
-             return {}; // Return current state if song exists
-           }
+             return {};
+          }
+          updatedSongsMap.set(song.id, song);
+          const updatedSongs = Array.from(updatedSongsMap.values());
 
-           // Add the song if it doesn't exist
-           const updatedSongs = [...playlist.songs, song];
-           const updatedPlaylist = { ...playlist, songs: updatedSongs };
-           const updatedPlaylists = [...state.playlists];
-           updatedPlaylists[playlistIndex] = updatedPlaylist;
-           songAdded = true;
 
-           return { playlists: updatedPlaylists };
-         });
-         return songAdded; // Return whether the song was actually added
+          // Add the song if it doesn't exist
+          // const updatedSongs = [...playlist.songs, song];
+          const updatedPlaylist = { ...playlist, songs: updatedSongs };
+          const updatedPlaylists = [...state.playlists];
+          updatedPlaylists[playlistIndex] = updatedPlaylist;
+          songAdded = true;
+
+          // Debugging: Log the state of the updated playlist songs
+          // console.log(`Playlist ${playlistId} songs after adding ${song.id}:`, updatedPlaylist.songs.map(s => s.id));
+
+          return { playlists: updatedPlaylists };
+        });
+        return songAdded; // Return whether the song was actually added
       },
-
 
       removeSongFromPlaylist: (playlistId, songId) =>
         set((state) => {
@@ -208,24 +225,29 @@ export const usePlaylistStore = create<PlaylistState>()(
                 return { playlists: updatedPlaylists, currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], isInSinglePlayMode: false };
              } else {
                 // Need to return updated playlists along with the state changes from playNextSong
-                 return { playlists: updatedPlaylists, ...get() }; // Might overwrite some state, refine if needed
+                 // Get the latest state after playNextSong and merge with updated playlists
+                 const nextState = get();
+                 return { playlists: updatedPlaylists, ...nextState };
              }
 
           } else if (state.activePlaylistId === playlistId && state.currentSongIndex !== -1 && removedSongIndexInOriginal !== -1) {
              // If removed song was BEFORE the current song in the original list, decrement the index
+             let newCurrentSongIndex = state.currentSongIndex;
              if (removedSongIndexInOriginal < state.currentSongIndex) {
-                 return { playlists: updatedPlaylists, currentSongIndex: state.currentSongIndex - 1 };
+                  newCurrentSongIndex--;
              }
-             // If removed song was AFTER or AT the current index, the index remains valid (or song moved)
-             // Need to potentially update play history if shuffle is on and the removed index was in history
+
+             let newPlayHistory = state.playHistory;
+              // Need to potentially update play history if shuffle is on and the removed index was in history
               if (state.isShuffling) {
-                  const updatedHistory = state.playHistory.map(histIndex => {
+                  newPlayHistory = state.playHistory.map(histIndex => {
                       if (histIndex > removedSongIndexInOriginal) return histIndex - 1;
                       if (histIndex === removedSongIndexInOriginal) return -1; // Mark removed index
                       return histIndex;
                   }).filter(histIndex => histIndex !== -1); // Remove marked index
-                   return { playlists: updatedPlaylists, playHistory: updatedHistory };
+                   return { playlists: updatedPlaylists, playHistory: newPlayHistory, currentSongIndex: newCurrentSongIndex };
               }
+               return { playlists: updatedPlaylists, currentSongIndex: newCurrentSongIndex };
           }
 
 
