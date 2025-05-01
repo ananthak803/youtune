@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -104,12 +103,15 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
 
   // Handles the final step of adding the song after playlist selection (if needed)
   const addSongToSpecificPlaylist = (playlistId: string, song: Song) => {
-     addSongToPlaylist(playlistId, song);
-     toast({
-       title: 'Song Added',
-       description: `"${song.title}" added to the playlist.`,
-     });
-     form.reset(); // Clear the form
+     const added = addSongToPlaylist(playlistId, song); // Capture the return value
+     if (added) { // Only show toast if the song was actually added
+       toast({
+         title: 'Song Added',
+         description: `"${song.title}" added to the playlist.`,
+       });
+       form.reset(); // Clear the form only on success
+     }
+     // Reset state regardless of whether it was added (to close dialog etc.)
      setSongToAdd(null);
      setIsSelectPlaylistDialogOpen(false);
      setIsLoading(false);

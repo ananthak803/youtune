@@ -1,4 +1,3 @@
-
 'use client';
 
 import { create } from 'zustand';
@@ -6,6 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Playlist, Song } from '@/lib/types';
 import { getYoutubeVideoMetadata } from '@/services/youtube'; // Import the service
 import type ReactPlayer from 'react-player'; // Import type for playerRef
+import { toast } from '@/hooks/use-toast'; // Correct import for toast
 
 interface PlaylistState {
   playlists: Playlist[];
@@ -27,7 +27,7 @@ interface PlaylistState {
   createPlaylist: (name: string) => void;
   deletePlaylist: (playlistId: string) => void;
   renamePlaylist: (playlistId: string, newName: string) => void;
-  addSongToPlaylist: (playlistId: string, song: Song) => void;
+  addSongToPlaylist: (playlistId: string, song: Song) => boolean; // Return true if added, false if duplicate
   removeSongFromPlaylist: (playlistId: string, songId: string) => void;
   reorderSongInPlaylist: (playlistId: string, fromIndex: number, toIndex: number) => void;
   setActivePlaylistId: (playlistId: string | null) => void;
@@ -143,12 +143,42 @@ export const usePlaylistStore = create<PlaylistState>()(
           ),
         })),
 
-      addSongToPlaylist: (playlistId, song) =>
-        set((state) => ({
-          playlists: state.playlists.map((p) =>
-            p.id === playlistId ? { ...p, songs: [...p.songs, song] } : p
-          ),
-        })),
+      addSongToPlaylist: (playlistId, song) => {
+         let songAdded = false;
+         set((state) => {
+           const playlistIndex = state.playlists.findIndex((p) => p.id === playlistId);
+           if (playlistIndex === -1) {
+               console.error(`Playlist with ID ${playlistId} not found.`);
+               return {}; // Return current state if playlist not found
+           }
+
+           const playlist = state.playlists[playlistIndex];
+
+           // Check if song already exists
+           const songExists = playlist.songs.some((s) => s.id === song.id);
+
+           if (songExists) {
+             toast({
+               title: 'Song Already Exists',
+               description: `"${song.title}" is already in this playlist.`,
+               variant: 'default', // Use 'default' or omit for non-destructive
+             });
+             songAdded = false;
+             return {}; // Return current state if song exists
+           }
+
+           // Add the song if it doesn't exist
+           const updatedSongs = [...playlist.songs, song];
+           const updatedPlaylist = { ...playlist, songs: updatedSongs };
+           const updatedPlaylists = [...state.playlists];
+           updatedPlaylists[playlistIndex] = updatedPlaylist;
+           songAdded = true;
+
+           return { playlists: updatedPlaylists };
+         });
+         return songAdded; // Return whether the song was actually added
+      },
+
 
       removeSongFromPlaylist: (playlistId, songId) =>
         set((state) => {
