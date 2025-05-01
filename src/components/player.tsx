@@ -70,7 +70,7 @@ export function Player() {
   const playerRef = useRef<ReactPlayer>(null);
   const [seeking, setSeeking] = useState(false);
   const [localVolume, setLocalVolume] = useState(volume);
-  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  // Removed showVolumeSlider state
   const [hasMounted, setHasMounted] = useState(false);
 
 
@@ -82,8 +82,11 @@ export function Player() {
   }, []);
 
   useEffect(() => {
-    setLocalVolume(volume);
-  }, [volume]);
+    // Sync local volume with store, but allow local updates while dragging
+    if (!seeking) {
+       setLocalVolume(volume);
+    }
+  }, [volume, seeking]);
 
  // --- Handlers ---
  const handleProgress = useCallback(
@@ -141,8 +144,8 @@ export function Player() {
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
-    setLocalVolume(newVolume);
-    setVolume(newVolume);
+    setLocalVolume(newVolume); // Update local state immediately for smooth slider feedback
+    setVolume(newVolume);     // Update zustand store (might be slightly delayed)
   };
 
    // --- Loop Logic ---
@@ -334,26 +337,24 @@ export function Player() {
         </div>
 
         {/* Volume Control */}
-        <div className="flex items-center justify-end gap-2 w-1/3 relative"
-          onMouseEnter={() => setShowVolumeSlider(true)}
-          onMouseLeave={() => setShowVolumeSlider(false)}
-        >
-          <Button variant="ghost" size="icon" onClick={toggleMute} className="h-8 w-8" aria-label={isMuted ? 'Unmute' : 'Mute'}>
+        <div className="flex items-center justify-end gap-2 w-1/3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMute}
+            className="h-8 w-8"
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
+          >
             {getVolumeIcon()}
           </Button>
-          <div className={cn(
-            "absolute bottom-full mb-2 right-0 w-24 transition-opacity duration-200 ease-in-out bg-popover p-2 rounded shadow-lg border", // Added background for visibility
-            showVolumeSlider ? "opacity-100 visible" : "opacity-0 invisible"
-          )}>
-            <Slider
-                value={[localVolume]}
-                max={1}
-                step={0.01}
-                className="w-full [&>span:first-child]:h-1 [&>span:first-child>span]:h-1 [&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0"
-                onValueChange={handleVolumeChange}
-                aria-label="Volume"
-              />
-          </div>
+          <Slider
+            value={[isMuted ? 0 : localVolume]} // Reflect mute state visually
+            max={1}
+            step={0.01}
+            className="w-24 [&>span:first-child]:h-1 [&>span:first-child>span]:h-1 [&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0"
+            onValueChange={handleVolumeChange}
+            aria-label="Volume"
+          />
         </div>
       </div>
     </footer>
