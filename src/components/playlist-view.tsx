@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -27,15 +28,25 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
     currentSong,
     isPlaying,
     reorderSongInPlaylist,
+    playPlaylist, // Add the new action
+    activePlaylistId,
+    isShuffling,
   } = usePlaylistStore((state) => ({
     playSong: state.playSong,
     removeSongFromPlaylist: state.removeSongFromPlaylist,
     currentSong: state.currentSong,
     isPlaying: state.isPlaying,
     reorderSongInPlaylist: state.reorderSongInPlaylist,
+    playPlaylist: state.playPlaylist, // Get the action
+    activePlaylistId: state.activePlaylistId,
+    isShuffling: state.isShuffling,
   }));
 
   const [draggedItemIndex, setDraggedItemIndex] = React.useState<number | null>(null);
+
+  const handlePlayPlaylist = () => {
+    playPlaylist(playlist.id);
+  };
 
   const handlePlaySong = (song: Song) => {
     playSong(song, playlist.id);
@@ -92,7 +103,20 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
 
   return (
     <div className="mt-8">
-      <h2 className="text-3xl font-bold mb-6">{playlist.name}</h2>
+      <div className="flex items-center gap-4 mb-6">
+          <h2 className="text-3xl font-bold">{playlist.name}</h2>
+          {playlist.songs.length > 0 && (
+             <Button
+                variant="default" // Or "secondary" or "ghost"
+                size="icon"
+                onClick={handlePlayPlaylist}
+                className="h-10 w-10 rounded-full bg-accent text-accent-foreground hover:bg-accent/90" // Example styling
+                aria-label={`Play playlist ${playlist.name}${isShuffling ? ' (shuffled)' : ''}`}
+             >
+                <Play className="h-5 w-5 fill-current" />
+             </Button>
+          )}
+      </div>
       {playlist.songs.length === 0 ? (
         <p className="text-muted-foreground">This playlist is empty. Add some songs!</p>
       ) : (
@@ -108,7 +132,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
           </TableHeader>
           <TableBody
             onDragOver={handleDragOver} // Apply drag over to the body to detect dropping between rows
-          >{/* Explicitly join mapped elements to avoid whitespace */}
+          >
             {playlist.songs.map((song, index) => (
               <TableRow
                 key={song.id}
@@ -119,13 +143,19 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
                 onDragEnd={handleDragEnd}
                 className={cn(
                   "group cursor-grab",
-                   currentSong?.id === song.id && 'bg-accent/10',
+                   currentSong?.id === song.id && activePlaylistId === playlist.id && 'bg-accent/10', // Highlight only if active playlist matches
                    'hover:bg-muted/50' // Ensure hover style remains consistent
                 )}
               ><TableCell className="py-2 px-2 w-10 align-middle"><GripVertical className="h-5 w-5 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" /></TableCell><TableCell className="py-2 px-2 w-16"><Button
                     variant="ghost"
                     size="icon"
-                    className="h-10 w-10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    className={cn(
+                       "h-10 w-10 transition-opacity",
+                       // Show always if it's the currently playing song, otherwise on hover/focus
+                       currentSong?.id === song.id && activePlaylistId === playlist.id && isPlaying
+                         ? 'opacity-100'
+                         : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                     )}
                     onClick={() => handlePlaySong(song)}
                     aria-label={`Play ${song.title}`}
                   ><Play className="h-5 w-5 fill-current" /></Button></TableCell><TableCell className="py-2"><div className="flex items-center gap-3"><Image
@@ -136,7 +166,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
                       className="rounded"
                       data-ai-hint="music album cover"
                       onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
-                    /><span className={cn("font-medium truncate", currentSong?.id === song.id && 'text-accent')}>{song.title}</span></div></TableCell><TableCell className={cn("py-2 text-muted-foreground truncate", currentSong?.id === song.id && 'text-accent/80')}>{song.author}</TableCell><TableCell className="py-2 text-right px-2 w-16"><Button
+                    /><span className={cn("font-medium truncate", currentSong?.id === song.id && activePlaylistId === playlist.id && 'text-accent')}>{song.title}</span></div></TableCell><TableCell className={cn("py-2 text-muted-foreground truncate", currentSong?.id === song.id && activePlaylistId === playlist.id && 'text-accent/80')}>{song.author}</TableCell><TableCell className="py-2 text-right px-2 w-16"><Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
