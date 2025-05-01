@@ -18,13 +18,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { getYoutubeVideoMetadata } from '@/services/youtube';
-import type { Song } from '@/lib/types';
+import type { Song, Playlist } from '@/lib/types';
 import { Play } from 'lucide-react';
+import { SelectPlaylistDialog } from './select-playlist-dialog'; // Import the new dialog
 
 const youtubeUrlSchema = z.object({
   url: z.string().url({ message: 'Please enter a valid YouTube URL.' }).refine(
     (url) => {
-      // Basic check for youtube.com or youtu.be links
       try {
         const parsedUrl = new URL(url);
         return parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname === 'youtu.be';
@@ -39,15 +39,22 @@ const youtubeUrlSchema = z.object({
 type YoutubeUrlFormValues = z.infer<typeof youtubeUrlSchema>;
 
 interface AddSongFormProps {
-  selectedPlaylistId: string | null;
+  // selectedPlaylistId is no longer directly needed here for adding,
+  // but could be kept if needed for other features (e.g., highlighting the current playlist)
+  selectedPlaylistId: string | null; // Keep for context, but adding logic will change
 }
 
 export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
   const { toast } = useToast();
-  const addSongToPlaylist = usePlaylistStore((state) => state.addSongToPlaylist);
-  const playSingleSong = usePlaylistStore((state) => state.playSingleSong);
-  const [isLoading, setIsLoading] = useState(false);
+  const { playlists, addSongToPlaylist, playSingleSong } = usePlaylistStore((state) => ({
+      playlists: state.playlists,
+      addSongToPlaylist: state.addSongToPlaylist,
+      playSingleSong: state.playSingleSong,
+  }));
+  const [isLoading, setIsLoading] = useState(false); // General loading for add/fetch
   const [isPlayNowLoading, setIsPlayNowLoading] = useState(false);
+  const [isSelectPlaylistDialogOpen, setIsSelectPlaylistDialogOpen] = useState(false);
+  const [songToAdd, setSongToAdd] = useState<Song | null>(null);
 
   const form = useForm<YoutubeUrlFormValues>({
     resolver: zodResolver(youtubeUrlSchema),
@@ -61,7 +68,7 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
         const url = new URL(urlValue);
         let videoId = '';
         if (url.hostname === 'youtu.be') {
-          videoId = url.pathname.substring(1).split('/')[0]; // Handle shorts etc.
+          videoId = url.pathname.substring(1).split('/')[0];
         } else if (url.hostname.includes('youtube.com')) {
           videoId = url.searchParams.get('v') || '';
           if (!videoId && url.pathname.startsWith('/embed/')) {
@@ -71,7 +78,6 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
             videoId = url.pathname.split('/')[2];
            }
         }
-        // Further clean videoId if query params are appended
         videoId = videoId.split('?')[0];
         return videoId || null;
       } catch (error) {
@@ -85,55 +91,100 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
     if (!videoId) {
       throw new Error('Could not extract video ID from URL.');
     }
-
     const metadata = await getYoutubeVideoMetadata(videoId);
-
     const song: Song = {
       id: videoId,
       title: metadata.title,
       author: metadata.author,
-      url: urlValue, // Store the original URL or a canonical one
+      url: `https://www.youtube.com/watch?v=${videoId}`, // Use canonical URL
       thumbnailUrl: metadata.thumbnailUrl,
     };
     return song;
   };
 
-  async function onAddToPlaylist(data: YoutubeUrlFormValues) {
-    if (!selectedPlaylistId) {
-      toast({
-        title: 'No Playlist Selected',
-        description: 'Please select or create a playlist first.',
-        variant: 'destructive',
-      });
+  // Handles the final step of adding the song after playlist selection (if needed)
+  const addSongToSpecificPlaylist = (playlistId: string, song: Song) => {
+     addSongToPlaylist(playlistId, song);
+     toast({
+       title: 'Song Added',
+       description: `"${song.title}" added to the playlist.`,
+     });
+     form.reset(); // Clear the form
+     setSongToAdd(null);
+     setIsSelectPlaylistDialogOpen(false);
+     setIsLoading(false);
+  };
+
+
+  // Triggered by the "Add to Playlist" button click
+  async function handleAddToPlaylistClick(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault(); // Prevent potential form submission
+    const urlValue = form.getValues('url');
+    const validationResult = youtubeUrlSchema.safeParse({ url: urlValue });
+
+    if (!validationResult.success) {
+      form.setError('url', { type: 'manual', message: validationResult.error.errors[0]?.message || 'Invalid URL' });
       return;
     }
 
     setIsLoading(true);
     try {
-      const newSong = await fetchAndPrepareSong(data.url);
-      if (!newSong) return; // Error handled within fetchAndPrepareSong via throw
+      const fetchedSong = await fetchAndPrepareSong(urlValue);
+      if (!fetchedSong) {
+           // Error should have been thrown by fetchAndPrepareSong
+           setIsLoading(false);
+           return;
+      }
 
-      addSongToPlaylist(selectedPlaylistId, newSong);
+      setSongToAdd(fetchedSong); // Store the song data temporarily
 
-      toast({
-        title: 'Song Added',
-        description: `"${newSong.title}" added to the playlist.`,
-      });
-      form.reset(); // Clear the form
+      if (playlists.length === 0) {
+        toast({
+          title: 'No Playlists',
+          description: 'Please create a playlist first before adding songs.',
+          variant: 'destructive',
+        });
+        setSongToAdd(null); // Clear temporary song data
+        setIsLoading(false);
+      } else if (playlists.length === 1) {
+        // Add directly to the only playlist
+        addSongToSpecificPlaylist(playlists[0].id, fetchedSong);
+        // addSongToSpecificPlaylist handles loading false, toast, reset etc.
+      } else {
+        // Multiple playlists: open the selection dialog
+        setIsSelectPlaylistDialogOpen(true);
+        // Keep isLoading true until a playlist is selected in the dialog
+      }
+
     } catch (error) {
-      console.error('Error adding song:', error);
+      console.error('Error preparing song:', error);
       toast({
-        title: 'Error Adding Song',
-        description: error instanceof Error ? error.message : 'Could not add the song. Please check the URL and try again.',
+        title: 'Error Preparing Song',
+        description: error instanceof Error ? error.message : 'Could not fetch song details. Please check the URL and try again.',
         variant: 'destructive',
       });
-    } finally {
+      setSongToAdd(null);
       setIsLoading(false);
     }
+    // Note: setIsLoading(false) is handled within the success/error paths or by the dialog callback
   }
 
+  // Called from the SelectPlaylistDialog
+  const handlePlaylistSelected = (playlistId: string) => {
+     if (songToAdd) {
+         addSongToSpecificPlaylist(playlistId, songToAdd);
+     } else {
+         console.error("Error: No song data available when playlist was selected.");
+         toast({ title: "Error", description: "Could not add song. Please try again.", variant: "destructive" });
+         setIsSelectPlaylistDialogOpen(false);
+         setIsLoading(false);
+         setSongToAdd(null);
+     }
+  };
+
+
   async function onPlayNow(event: React.MouseEvent<HTMLButtonElement>) {
-     event.preventDefault(); // Prevent form submission if inside form
+     event.preventDefault();
      const urlValue = form.getValues('url');
      const validationResult = youtubeUrlSchema.safeParse({ url: urlValue });
 
@@ -153,8 +204,6 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
         title: 'Playing Now',
         description: `"${songToPlay.title}"`,
       });
-      // Optionally clear the form after playing
-      // form.reset();
     } catch (error) {
       console.error('Error playing song:', error);
       toast({
@@ -171,48 +220,68 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
   const isAnyLoading = isLoading || isPlayNowLoading;
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onAddToPlaylist)} className="mb-8 flex flex-wrap items-end gap-2 md:flex-nowrap md:gap-4">
-        <FormField
-          control={form.control}
-          name="url"
-          render={({ field }) => (
-            <FormItem className="flex-1 min-w-[200px]">
-              <FormLabel>YouTube URL</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Paste a YouTube link here (e.g., https://www.youtube.com/watch?v=...)"
-                  {...field}
-                  disabled={isAnyLoading}
-                  aria-label="YouTube URL Input"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onPlayNow}
-            disabled={isAnyLoading || !isUrlValid}
-            aria-label="Play song now"
-            className="flex-1 md:flex-none"
-          >
-            {isPlayNowLoading ? 'Loading...' : <Play className="mr-2 h-4 w-4" />}
-            Play Now
-          </Button>
-          <Button
-            type="submit"
-            disabled={isAnyLoading || !selectedPlaylistId || !isUrlValid}
-            aria-label="Add song to playlist"
-             className="flex-1 md:flex-none"
-          >
-            {isLoading ? 'Adding...' : 'Add to Playlist'}
-          </Button>
+    <>
+      <Form {...form}>
+        {/* Use a div instead of form to prevent default submission */}
+        <div className="mb-8 flex flex-wrap items-end gap-2 md:flex-nowrap md:gap-4">
+          <FormField
+            control={form.control}
+            name="url"
+            render={({ field }) => (
+              <FormItem className="flex-1 min-w-[200px]">
+                <FormLabel>YouTube URL</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Paste a YouTube link here (e.g., https://www.youtube.com/watch?v=...)"
+                    {...field}
+                    disabled={isAnyLoading}
+                    aria-label="YouTube URL Input"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="flex gap-2 w-full md:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onPlayNow}
+              disabled={isAnyLoading || !isUrlValid}
+              aria-label="Play song now"
+              className="flex-1 md:flex-none"
+            >
+              {isPlayNowLoading ? 'Loading...' : <Play className="mr-2 h-4 w-4" />}
+              Play Now
+            </Button>
+            <Button
+              type="button" // Change type to button
+              onClick={handleAddToPlaylistClick} // Use the new handler
+              disabled={isAnyLoading || !isUrlValid} // Disable only if loading or URL invalid
+              aria-label="Add song to playlist"
+              className="flex-1 md:flex-none"
+            >
+              {isLoading ? 'Processing...' : 'Add to Playlist'}
+            </Button>
+          </div>
         </div>
-      </form>
-    </Form>
+      </Form>
+
+      {/* Playlist Selection Dialog */}
+      <SelectPlaylistDialog
+        isOpen={isSelectPlaylistDialogOpen}
+        onOpenChange={(open) => {
+             setIsSelectPlaylistDialogOpen(open);
+             // If dialog is closed without selection, reset loading state
+             if (!open) {
+                setIsLoading(false);
+                setSongToAdd(null);
+             }
+        }}
+        playlists={playlists}
+        onSelectPlaylist={handlePlaylistSelected}
+        songTitle={songToAdd?.title} // Pass song title for context
+      />
+    </>
   );
 }
