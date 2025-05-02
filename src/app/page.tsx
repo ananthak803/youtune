@@ -6,9 +6,11 @@ import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
 import { AddSongForm } from '@/components/add-song-form';
-import type { Playlist, Song } from '@/lib/types';
+import { YoutubeSearch } from '@/components/youtube-search'; // Import the new component
+import type { Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator'; // Import Separator
 
 export default function Home() {
   // Get state from the store
@@ -46,6 +48,13 @@ export default function Home() {
             <div className="container mx-auto px-4 py-8 md:px-8">
               {/* AddSongForm doesn't need the viewed playlist ID for adding songs anymore */}
               <AddSongForm selectedPlaylistId={null} />
+
+              {/* YouTube Search Section */}
+              <YoutubeSearch />
+
+              <Separator className="my-8" /> {/* Add a separator */}
+
+              {/* Playlist View Section */}
               {selectedPlaylistForView ? (
                 // Pass the locally tracked selected playlist object to PlaylistView
                 <PlaylistView playlist={selectedPlaylistForView} />

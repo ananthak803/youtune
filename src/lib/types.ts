@@ -11,3 +11,11 @@ export interface Playlist {
   name: string;
   songs: Song[];
 }
+
+// Added for YouTube search results
+export interface YoutubeSearchResult {
+    videoId: string;
+    title: string;
+    author: string; // Channel name
+    thumbnailUrl: string;
+}
