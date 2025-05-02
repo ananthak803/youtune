@@ -120,11 +120,14 @@ export const usePlaylistStore = create<PlaylistState>()(
           let newCurrentSong = state.currentSong;
           let newCurrentSongIndex = state.currentSongIndex;
           let newIsInSinglePlayMode = state.isInSinglePlayMode;
+          let newIsPlaying = state.isPlaying;
 
           if (state.activePlaylistId === playlistId) {
             newActivePlaylistId = updatedPlaylists[0]?.id ?? null;
+            // Stop playing if the active playlist is deleted
             newCurrentSong = null;
             newCurrentSongIndex = -1;
+            newIsPlaying = false;
             newIsInSinglePlayMode = false; // Exit single play mode if active playlist deleted
           }
           return {
@@ -132,8 +135,8 @@ export const usePlaylistStore = create<PlaylistState>()(
              activePlaylistId: newActivePlaylistId,
              currentSong: newCurrentSong,
              currentSongIndex: newCurrentSongIndex,
-             isPlaying: false,
-             playHistory: [],
+             isPlaying: newIsPlaying, // Use updated playing state
+             playHistory: [], // Clear history when playlist deleted
              isInSinglePlayMode: newIsInSinglePlayMode,
            };
         }),
@@ -187,57 +190,107 @@ export const usePlaylistStore = create<PlaylistState>()(
         set((state) => {
           let wasPlayingRemovedSong = false;
           let removedSongIndexInOriginal = -1; // Store the original index of the removed song
-          const originalPlaylist = state.playlists.find(p => p.id === playlistId);
-
+          let nextSongToPlay: Song | null = null;
+          let nextSongIndex = -1;
+          let playNext = false;
 
           const updatedPlaylists = state.playlists.map((p) => {
             if (p.id === playlistId) {
-               removedSongIndexInOriginal = p.songs.findIndex((s) => s.id === songId);
+               const originalSongs = [...p.songs]; // Copy original songs before filtering
+               removedSongIndexInOriginal = originalSongs.findIndex((s) => s.id === songId);
+               const updatedSongs = originalSongs.filter((s) => s.id !== songId);
+
                if (state.currentSong?.id === songId && state.activePlaylistId === playlistId) {
-                 wasPlayingRemovedSong = true;
+                   wasPlayingRemovedSong = true;
+                   // Determine the next song to play IF the removed song was playing
+                   const activePlaylist = get()._getActivePlaylist(); // Get current state playlist
+                   if (activePlaylist && activePlaylist.songs.length > 0) {
+                       const numSongs = activePlaylist.songs.length; // Length before removal
+                       let potentialNextIndex = -1;
+
+                       if(state.isShuffling){
+                          // In shuffle, pick a random *different* song from the remaining ones
+                          const remainingIndices = updatedSongs.map((s, i) => i).filter(i => i !== state.currentSongIndex); // indices in the *new* list
+                          if(remainingIndices.length > 0){
+                             potentialNextIndex = remainingIndices[Math.floor(Math.random() * remainingIndices.length)];
+                          } else if (updatedSongs.length > 0) {
+                             potentialNextIndex = 0; // Only one song left, play that
+                          }
+                       } else {
+                          // In normal mode, try to play the song at the same original index, if it exists
+                          if (removedSongIndexInOriginal < updatedSongs.length) {
+                             potentialNextIndex = removedSongIndexInOriginal;
+                          } else if (updatedSongs.length > 0) {
+                             // If removed was last, play the new last song
+                             potentialNextIndex = updatedSongs.length - 1;
+                          }
+                       }
+
+
+                       if (potentialNextIndex !== -1 && potentialNextIndex < updatedSongs.length) {
+                         nextSongToPlay = updatedSongs[potentialNextIndex];
+                         nextSongIndex = potentialNextIndex;
+                         playNext = true;
+                       }
+                   }
                }
-               return { ...p, songs: p.songs.filter((s) => s.id !== songId) };
+               return { ...p, songs: updatedSongs };
             }
             return p;
           });
 
-           const updatedActivePlaylist = updatedPlaylists.find(p => p.id === state.activePlaylistId);
-
+          // --- State Update Logic ---
           if (wasPlayingRemovedSong) {
-             // If the removed song was playing, play the next logical song
-             // Use a timeout to allow the state update for removed song to potentially settle
-             // before triggering the next song. This is a bit of a workaround for potential race conditions.
-             setTimeout(() => get().playNextSong(), 50);
-             // If playNextSong didn't change the song (e.g., end of playlist), clear playback
-             if (get().currentSong?.id === songId) {
-                return { playlists: updatedPlaylists, currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], isInSinglePlayMode: false };
+             if (playNext && nextSongToPlay) {
+                // Play the determined next song
+                return {
+                  playlists: updatedPlaylists,
+                  currentSong: nextSongToPlay,
+                  currentSongIndex: nextSongIndex,
+                  isPlaying: true, // Keep playing
+                  currentSongProgress: 0,
+                  currentSongDuration: 0,
+                  playHistory: state.isShuffling ? [nextSongIndex] : [], // Reset history for next song
+                  isInSinglePlayMode: false,
+                };
              } else {
-                // Get the latest state *after* the potential playNextSong and merge with updated playlists
-                 const nextState = get();
-                 return { playlists: updatedPlaylists, ...nextState };
+                 // No next song found (playlist became empty), stop playback
+                return {
+                  playlists: updatedPlaylists,
+                  currentSong: null,
+                  currentSongIndex: -1,
+                  isPlaying: false,
+                  playHistory: [],
+                  currentSongProgress: 0,
+                  currentSongDuration: 0,
+                  isInSinglePlayMode: false
+                };
              }
-
           } else if (state.activePlaylistId === playlistId && state.currentSongIndex !== -1 && removedSongIndexInOriginal !== -1) {
-             // If removed song was BEFORE the current song in the original list, decrement the index
+             // If removed song was BEFORE the current playing song (which wasn't the removed one)
              let newCurrentSongIndex = state.currentSongIndex;
              if (removedSongIndexInOriginal < state.currentSongIndex) {
-                  newCurrentSongIndex--;
+                  newCurrentSongIndex--; // Decrement the index
              }
 
              let newPlayHistory = state.playHistory;
-              // Need to potentially update play history if shuffle is on and the removed index was in history
-              if (state.isShuffling) {
+              // Adjust play history indices if not shuffling
+              if (!state.isShuffling) {
                   newPlayHistory = state.playHistory.map(histIndex => {
                       if (histIndex > removedSongIndexInOriginal) return histIndex - 1;
                       if (histIndex === removedSongIndexInOriginal) return -1; // Mark removed index
                       return histIndex;
                   }).filter(histIndex => histIndex !== -1); // Remove marked index
-                   return { playlists: updatedPlaylists, playHistory: newPlayHistory, currentSongIndex: newCurrentSongIndex };
+              } else {
+                  // Reordering/removing while shuffling makes history mapping complex.
+                  // Simplest is to potentially clear history or just leave it, accepting potential odd 'back' behavior.
+                  // Let's clear it for simplicity when a song is removed while shuffling.
+                  newPlayHistory = state.currentSongIndex !== -1 ? [newCurrentSongIndex] : [];
               }
-               return { playlists: updatedPlaylists, currentSongIndex: newCurrentSongIndex };
+               return { playlists: updatedPlaylists, playHistory: newPlayHistory, currentSongIndex: newCurrentSongIndex };
           }
 
-
+          // Default: just update the playlists if no playing state needed changing
           return { playlists: updatedPlaylists };
         }),
 
@@ -257,22 +310,23 @@ export const usePlaylistStore = create<PlaylistState>()(
            let newCurrentSongIndex = state.currentSongIndex;
            let newPlayHistory = state.playHistory;
 
-           if (state.activePlaylistId === playlistId) {
-             // Update current song index if it was affected by the reorder
-             if (state.currentSong) {
-               newCurrentSongIndex = newSongs.findIndex(song => song.id === state.currentSong!.id);
-               if (newCurrentSongIndex === -1) {
-                  console.warn("[Store] Current song not found after reorder, resetting index.");
-                  newCurrentSongIndex = -1; // Should ideally not happen
-               }
+           if (state.activePlaylistId === playlistId && state.currentSong) {
+             // Update current song index based on its new position
+             newCurrentSongIndex = newSongs.findIndex(song => song.id === state.currentSong!.id);
+             if (newCurrentSongIndex === -1) {
+                console.warn("[Store] Current song not found after reorder, resetting index.");
+                // This case indicates a problem, maybe the song was unexpectedly removed.
+                // Keep the old index for now, or reset? Resetting seems safer.
+                newCurrentSongIndex = -1;
              }
 
-              // Update play history indices if shuffling is NOT active
+             // Update play history indices only if NOT shuffling
              if (!state.isShuffling) {
                  newPlayHistory = state.playHistory.map(histIndex => {
-                     if (histIndex === fromIndex) return toIndex; // Moved item's new index
+                     // If the index is the one that moved
+                     if (histIndex === fromIndex) return toIndex;
+                     // If the index was between the move points
                      if (histIndex >= Math.min(fromIndex, toIndex) && histIndex <= Math.max(fromIndex, toIndex)) {
-                         // Item was between the move points
                          if (fromIndex < toIndex) { // Moved down
                              if (histIndex > fromIndex) return histIndex - 1;
                          } else { // Moved up
@@ -282,11 +336,8 @@ export const usePlaylistStore = create<PlaylistState>()(
                      return histIndex; // Index outside the affected range
                  });
              } else {
-               // If shuffling, history refers to original indices. A simple reorder might invalidate
-               // this history. It's complex to map correctly. Maybe clear history on reorder when shuffling?
-               // Or, keep it, knowing it might lead to unexpected 'previous' songs.
-               // For now, let's keep it, but be aware of potential issues.
-               // console.warn("[Store] Reordering while shuffling might affect 'previous song' behavior.");
+               // Reordering while shuffling: Clear history for simplicity.
+               newPlayHistory = newCurrentSongIndex !== -1 ? [newCurrentSongIndex] : [];
              }
            }
 
@@ -295,28 +346,40 @@ export const usePlaylistStore = create<PlaylistState>()(
          }),
 
 
-      setActivePlaylistId: (playlistId) =>
+     setActivePlaylistId: (playlistId) =>
         set((state) => {
            if (playlistId !== state.activePlaylistId) {
               const newPlaylist = state.playlists.find(p => p.id === playlistId);
-              // Stop playback when switching playlists unless the current song is in the new one
-              const currentSongInNewPlaylist = newPlaylist?.songs.find(s => s.id === state.currentSong?.id);
+              // Check if the currently playing song exists in the new playlist
+              const currentSongInNewPlaylistIndex = newPlaylist?.songs.findIndex(s => s.id === state.currentSong?.id) ?? -1;
 
-              if (currentSongInNewPlaylist) {
-                 const newIndex = newPlaylist.songs.findIndex(s => s.id === state.currentSong?.id);
+              if (currentSongInNewPlaylistIndex !== -1) {
+                 // Song exists in the new playlist, update index and active ID, keep playing state
+                 console.log(`[Store] Switching to playlist ${playlistId}, current song found, continuing playback.`);
                  return {
                      activePlaylistId: playlistId,
-                     currentSongIndex: newIndex,
-                     // Reset history when switching playlist even if song is the same
-                     playHistory: state.isShuffling ? [newIndex] : [],
-                     isInSinglePlayMode: false
+                     currentSongIndex: currentSongInNewPlaylistIndex,
+                     // Reset history when switching playlist context, even if song is the same
+                     playHistory: state.isShuffling ? [currentSongInNewPlaylistIndex] : [],
+                     isInSinglePlayMode: false // Ensure not in single play mode
                  };
               } else {
-                 // Stop playback and clear related state
-                 return { activePlaylistId: playlistId, currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], isInSinglePlayMode: false, currentSongProgress: 0, currentSongDuration: 0 };
+                 // Song does NOT exist in new playlist, stop playback and clear related state
+                 console.log(`[Store] Switching to playlist ${playlistId}, current song not found, stopping playback.`);
+                 return {
+                     activePlaylistId: playlistId,
+                     currentSong: null,
+                     currentSongIndex: -1,
+                     isPlaying: false, // Stop playing
+                     playHistory: [],
+                     isInSinglePlayMode: false,
+                     currentSongProgress: 0,
+                     currentSongDuration: 0
+                 };
               }
            }
-           // If clicking the already active playlist, ensure single play mode is off
+           // If clicking the already active playlist, just ensure single play mode is off
+           console.log(`[Store] Re-selecting active playlist ${playlistId}, ensuring not in single mode.`);
            return { activePlaylistId: playlistId, isInSinglePlayMode: false };
         }),
 
@@ -325,28 +388,29 @@ export const usePlaylistStore = create<PlaylistState>()(
          const playlist = state.playlists.find((p) => p.id === playlistId);
          if (!playlist || playlist.songs.length === 0) return {};
 
-         // Prevent rapid clicks: If already playing this playlist's first song, don't restart
          let startIndex = 0;
+         let shuffledIndices: number[] = [];
          if (state.isShuffling) {
-             const shuffledIndices = state._getShuffledPlaylistOrder(playlist);
+             shuffledIndices = state._getShuffledPlaylistOrder(playlist);
              startIndex = shuffledIndices[0] ?? 0;
          }
          const startSong = playlist.songs[startIndex];
 
-         // If this song from this playlist is ALREADY the current song and playing, do nothing.
+         // Prevent rapid clicks / Restarting unnecessarily
           if (state.currentSong?.id === startSong.id && state.activePlaylistId === playlistId && state.isPlaying) {
-              console.log("[Store] Playlist already playing, ignoring click.");
+              console.log("[Store] Playlist already playing from start, ignoring click.");
+              // If shuffling, maybe re-shuffle and restart? Optional behavior.
               return {};
           }
-          // If it's the same song but paused, just play it
+          // If it's the same start song but paused, just play it
           if (state.currentSong?.id === startSong.id && state.activePlaylistId === playlistId && !state.isPlaying) {
               console.log("[Store] Resuming playlist from start.");
               return { isPlaying: true };
           }
 
 
-         // Otherwise, start the playlist
-         console.log("[Store] Starting playlist playback.");
+         // Start or restart the playlist
+         console.log("[Store] Starting playlist playback.", state.isShuffling ? "(Shuffled)" : "");
          return {
            currentSong: startSong,
            currentSongIndex: startIndex,
@@ -354,7 +418,7 @@ export const usePlaylistStore = create<PlaylistState>()(
            isPlaying: true,
            currentSongProgress: 0, // Reset progress
            currentSongDuration: 0, // Reset duration
-           playHistory: [startIndex], // Start history
+           playHistory: [startIndex], // Start history with the first song's index
            isInSinglePlayMode: false,
          };
       }),
@@ -379,10 +443,12 @@ export const usePlaylistStore = create<PlaylistState>()(
                 return { isPlaying: true };
             }
 
-          // Determine if history should be reset
-          const resetHistory = state.activePlaylistId !== playlistId || (!state.isShuffling && get().isShuffling) || state.isInSinglePlayMode;
+          // Determine if history should be reset (switching playlist, turning shuffle ON, or coming from single play mode)
+          const isNewContext = state.activePlaylistId !== playlistId || state.isInSinglePlayMode;
+          // History always starts with the currently played song's index
+          const newHistory = [songIndex];
 
-          console.log("[Store] Playing new song from playlist.");
+          console.log("[Store] Playing new song from playlist context.");
           return {
             currentSong: song,
             currentSongIndex: songIndex,
@@ -390,7 +456,7 @@ export const usePlaylistStore = create<PlaylistState>()(
             isPlaying: true,
             currentSongProgress: 0, // Reset progress
             currentSongDuration: 0, // Reset duration
-            playHistory: resetHistory ? [songIndex] : [...state.playHistory, songIndex],
+            playHistory: newHistory, // Start history with this song's index
             isInSinglePlayMode: false, // Explicitly set to false when playing from playlist
           };
         }),
@@ -417,8 +483,9 @@ export const usePlaylistStore = create<PlaylistState>()(
             currentSongProgress: 0, // Reset progress
             currentSongDuration: 0, // Reset duration
             playHistory: [], // History doesn't apply here
-            isShuffling: false, // Disable shuffle for single play
-            isLoopingPlaylist: false, // Disable playlist loop
+            // Retain shuffle/loop settings for playlist mode, but they won't apply here
+            // isShuffling: false, // Optionally disable shuffle for single play
+            // isLoopingPlaylist: false, // Optionally disable playlist loop
             isInSinglePlayMode: true, // Set the flag
           };
       }),
@@ -432,6 +499,7 @@ export const usePlaylistStore = create<PlaylistState>()(
                  return { currentSongProgress: 0, isPlaying: true };
              } else {
                 // Stop playback
+                console.log("[Store] Single song finished, stopping playback.");
                 return { currentSong: null, currentSongIndex: -1, isPlaying: false, isInSinglePlayMode: false, currentSongProgress: 0, currentSongDuration: 0 };
             }
         }
@@ -439,6 +507,7 @@ export const usePlaylistStore = create<PlaylistState>()(
         // --- Playlist Mode Logic ---
         const activePlaylist = state._getActivePlaylist();
         if (!activePlaylist || activePlaylist.songs.length === 0) {
+            console.log("[Store] Play next: No active playlist or playlist empty.");
             return { currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], currentSongProgress: 0, currentSongDuration: 0 };
         }
 
@@ -447,49 +516,64 @@ export const usePlaylistStore = create<PlaylistState>()(
 
         if (state.isLooping) {
             // If looping current song (in playlist mode), restart it
+            console.log("[Store] Looping current song.");
             if (playerRef.current) playerRef.current.seekTo(0);
              return { currentSongProgress: 0, isPlaying: true };
         }
 
 
         if (state.isShuffling) {
+            console.log("[Store] Play next: Calculating next shuffled song.");
             // Avoid playing the immediate last few songs if possible
             const recentHistory = state.playHistory.slice(-Math.min(state.playHistory.length, Math.floor(numSongs / 2) + 1));
             const availableIndices = activePlaylist.songs.map((_, i) => i).filter(i => !recentHistory.includes(i));
 
             if (availableIndices.length > 0) {
                 nextIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+                console.log("[Store] Play next: Found available index:", nextIndex);
             } else {
                  // If all songs recently played, pick a random one excluding the very last one (if possible)
                 const possibleIndices = activePlaylist.songs.map((_, i) => i).filter(i => i !== state.currentSongIndex);
                 if (possibleIndices.length > 0) {
                     nextIndex = possibleIndices[Math.floor(Math.random() * possibleIndices.length)];
+                     console.log("[Store] Play next: All songs recent, picked random excluding last:", nextIndex);
                 } else {
                     nextIndex = state.currentSongIndex; // Play the same song again if only one song
+                    console.log("[Store] Play next: Only one song, repeating:", nextIndex);
                 }
             }
         } else {
             nextIndex = state.currentSongIndex + 1;
+            console.log("[Store] Play next: Calculating next sequential song index:", nextIndex);
         }
 
+        // Check bounds and playlist looping
         if (nextIndex >= numSongs) {
             if (state.isLoopingPlaylist) {
                 nextIndex = 0;
+                 console.log("[Store] Play next: End of playlist, looping back to start:", nextIndex);
             } else {
                 // End of playlist, stop playing
+                console.log("[Store] Play next: End of playlist, stopping playback.");
                 return { currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], currentSongProgress: 0, currentSongDuration: 0 };
             }
         } else if (nextIndex < 0 && !state.isShuffling) {
              // This case should ideally not be reached normally in non-shuffle mode unless index was -1
+             console.warn("[Store] Play next: Calculated invalid negative index in sequential mode, resetting to 0.");
              nextIndex = 0;
         }
 
 
         const nextSong = activePlaylist.songs[nextIndex];
-        // Add to history only if the song actually changed or shuffle is on
-        const newHistory = (state.isShuffling || nextIndex !== state.currentSongIndex)
-            ? [...state.playHistory, nextIndex]
-            : state.playHistory;
+        if (!nextSong) {
+            console.error("[Store] Play next: Could not find song at calculated index:", nextIndex);
+             return { currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], currentSongProgress: 0, currentSongDuration: 0 };
+        }
+
+        // Add to history
+        const newHistory = [...state.playHistory, nextIndex];
+        console.log(`[Store] Play next: Playing song "${nextSong.title}" at index ${nextIndex}. History:`, newHistory);
+
 
         return {
             currentSong: nextSong,
@@ -507,10 +591,12 @@ export const usePlaylistStore = create<PlaylistState>()(
         // Previous song logic doesn't make sense in single play mode, restart current or do nothing
         if (state.isInSinglePlayMode) {
             if (state.currentSongProgress > 3 && playerRef.current) {
+                console.log("[Store] Play previous: Restarting single song.");
                 playerRef.current.seekTo(0);
                 return { currentSongProgress: 0, isPlaying: true };
             }
             // Otherwise, do nothing or maybe just stop? Let's just restart.
+             console.log("[Store] Play previous: Restarting single song (near beginning).");
              if (playerRef.current) playerRef.current.seekTo(0);
              return { currentSongProgress: 0, isPlaying: true };
         }
@@ -518,11 +604,13 @@ export const usePlaylistStore = create<PlaylistState>()(
         // --- Playlist Mode Logic ---
         const activePlaylist = state._getActivePlaylist();
         if (!activePlaylist || activePlaylist.songs.length === 0) {
+             console.log("[Store] Play previous: No active playlist or playlist empty.");
             return { currentSong: null, currentSongIndex: -1, isPlaying: false, playHistory: [], currentSongProgress: 0, currentSongDuration: 0 };
         }
 
         // If played more than 3 seconds, restart current song
         if (state.currentSongProgress > 3 && playerRef.current) {
+             console.log("[Store] Play previous: Restarting current song (progress > 3s).");
              playerRef.current.seekTo(0);
              return { currentSongProgress: 0, isPlaying: true };
         }
@@ -536,33 +624,48 @@ export const usePlaylistStore = create<PlaylistState>()(
             // Pop the current song index, get the one before it
             newHistory = state.playHistory.slice(0, -1);
             prevIndex = newHistory[newHistory.length - 1];
+             console.log("[Store] Play previous: Using shuffled history. Prev index:", prevIndex);
         } else if (!state.isShuffling) {
             prevIndex = state.currentSongIndex - 1;
+            console.log("[Store] Play previous: Calculating previous sequential index:", prevIndex);
+            // For sequential, we don't modify history here, just going back
+            newHistory = state.playHistory; // Keep existing history
+        } else {
+           // Shuffling but history has 0 or 1 entry, cannot go back
+           console.log("[Store] Play previous: Cannot go back (shuffling with short history). Restarting current song.");
+           if (playerRef.current) playerRef.current.seekTo(0);
+           return { currentSongProgress: 0, isPlaying: true };
         }
 
         // Handle beginning of playlist cases
         if (prevIndex < 0) {
             if (state.isLoopingPlaylist && !state.isShuffling) {
                 prevIndex = numSongs - 1; // Loop to end
+                 console.log("[Store] Play previous: Looping playlist to end:", prevIndex);
             } else {
-                 // If not looping or shuffling, restart current song (or do nothing if already at start)
+                 // If not looping or shuffling with no history, restart current song
+                 console.log("[Store] Play previous: At start, restarting current song.");
                  if (playerRef.current) playerRef.current.seekTo(0);
                  return { currentSongProgress: 0, isPlaying: true };
-                 // If shuffling and no history, can't go back, just restart
-                 // return {};
             }
         }
 
          // Check if prevIndex is valid after potential history manipulation
          if (prevIndex < 0 || prevIndex >= numSongs) {
-             console.warn("[Store] Invalid previous index calculated:", prevIndex);
+             console.warn("[Store] Play previous: Invalid previous index calculated:", prevIndex);
              if (playerRef.current) playerRef.current.seekTo(0);
              return { currentSongProgress: 0, isPlaying: true }; // Fallback: restart current song
          }
 
 
         const prevSong = activePlaylist.songs[prevIndex];
+        if (!prevSong) {
+            console.error("[Store] Play previous: Could not find song at calculated index:", prevIndex);
+             if (playerRef.current) playerRef.current.seekTo(0);
+             return { currentSongProgress: 0, isPlaying: true }; // Fallback: restart current song
+        }
 
+        console.log(`[Store] Play previous: Playing song "${prevSong.title}" at index ${prevIndex}. History:`, newHistory);
 
         return {
             currentSong: prevSong,
@@ -578,33 +681,51 @@ export const usePlaylistStore = create<PlaylistState>()(
       togglePlayPause: () => set((state) => {
           // Prevent starting playback if there's no song
           if (!state.currentSong && !state.isPlaying) {
+               console.log("[Store] Toggle play/pause: No song, doing nothing.");
               return {};
           }
-          return { isPlaying: !state.isPlaying };
+          const newState = !state.isPlaying;
+          console.log(`[Store] Toggle play/pause: Setting isPlaying to ${newState}`);
+          return { isPlaying: newState };
       }),
 
       toggleShuffle: () => set((state) => {
-          if (state.isInSinglePlayMode) return {}; // Cannot shuffle in single play mode
+          if (state.isInSinglePlayMode) {
+               console.log("[Store] Toggle shuffle: Cannot shuffle in single play mode.");
+               return {};
+          }
           const turningShuffleOn = !state.isShuffling;
+          console.log(`[Store] Toggle shuffle: Setting isShuffling to ${turningShuffleOn}`);
+          // Reset history only if turning shuffle ON and there's a current song context
+          const newHistory = turningShuffleOn && state.currentSongIndex !== -1
+                           ? [state.currentSongIndex]
+                           : state.playHistory;
           return {
               isShuffling: turningShuffleOn,
-              // Reset history only if turning shuffle ON and there's a current song context
-              playHistory: turningShuffleOn && state.currentSongIndex !== -1
-                           ? [state.currentSongIndex]
-                           : state.playHistory
-          }
+              playHistory: newHistory
+          };
        }),
 
-      toggleLoop: () => set((state) => ({ isLooping: !state.isLooping })), // Applies to both modes
+      toggleLoop: () => set((state) => {
+           const newState = !state.isLooping;
+           console.log(`[Store] Toggle loop song: Setting isLooping to ${newState}`);
+           return { isLooping: newState };
+       }), // Applies to both modes
 
       toggleLoopPlaylist: () => set((state) => {
-          if (state.isInSinglePlayMode) return {}; // Cannot loop playlist in single play mode
-          return { isLoopingPlaylist: !state.isLoopingPlaylist }
+          if (state.isInSinglePlayMode) {
+               console.log("[Store] Toggle loop playlist: Cannot loop playlist in single play mode.");
+               return {};
+          }
+           const newState = !state.isLoopingPlaylist;
+           console.log(`[Store] Toggle loop playlist: Setting isLoopingPlaylist to ${newState}`);
+          return { isLoopingPlaylist: newState };
       }),
 
       // Only update progress if the song hasn't changed since the update was triggered
       setCurrentSongProgress: (progress) => set((state) => {
-        if (state.isPlaying || (progress === 0 && !state.isPlaying) ) { // Allow setting to 0 when paused
+        // Allow updates if playing OR if we are setting progress to 0 (e.g., seeking manually while paused)
+        if (state.isPlaying || progress === 0) {
              return { currentSongProgress: progress };
         }
         return {};
@@ -612,15 +733,20 @@ export const usePlaylistStore = create<PlaylistState>()(
        // Only update duration if the song hasn't changed
       setCurrentSongDuration: (duration) => set((state) => {
          // We might get duration updates slightly after the song changes.
-         // A simple check: if current song exists, update its duration.
+         // Check if a current song exists before updating its duration.
          if (state.currentSong) {
              return { currentSongDuration: duration };
          }
+          // console.log("[Store] Set duration: No current song, ignoring update.");
          return {};
       }),
 
-      setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)), isMuted: volume === 0 ? true : false }),
-      toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+      setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)), isMuted: volume <= 0 ? true : false }), // Mute if volume is 0 or less
+      toggleMute: () => set((state) => {
+           const newMuteState = !state.isMuted;
+           console.log(`[Store] Toggle mute: Setting isMuted to ${newMuteState}`);
+           return { isMuted: newMuteState };
+       }),
 
     }),
     {
@@ -634,31 +760,32 @@ export const usePlaylistStore = create<PlaylistState>()(
         isShuffling: state.isShuffling,
         isLooping: state.isLooping,
         isLoopingPlaylist: state.isLoopingPlaylist,
-        // Don't persist isInSinglePlayMode, currentSong, index, progress, duration, history, isPlaying
+        // Don't persist: currentSong, currentSongIndex, playHistory, isPlaying, currentSongProgress, currentSongDuration, isInSinglePlayMode
       }),
       onRehydrateStorage: (state) => {
-        console.log("[Store] Hydration started...");
+        console.log("[Store] Hydration starting...");
         return (persistedState, error) => {
           if (error) {
-            console.error("[Store] An error occurred during hydration:", error);
+            console.error("[Store] Hydration error:", error);
           } else if (persistedState) {
-            console.log("[Store] Hydration successful. Applying persisted state and resetting transient state.");
+            console.log("[Store] Hydration successful. Applying persisted state:", persistedState);
 
-            // De-duplicate songs within each playlist from persisted state
+            // De-duplicate songs within each playlist
              const dedupedPlaylists = persistedState.playlists.map(playlist => {
                const uniqueSongs = new Map<string, Song>();
                playlist.songs.forEach(song => {
                  if (!uniqueSongs.has(song.id)) {
                    uniqueSongs.set(song.id, song);
                  } else {
-                   console.warn(`[Store Rehydrate] Duplicate song ID ${song.id} ("${song.title}") found and removed from playlist ${playlist.id} ("${playlist.name}").`);
+                   console.warn(`[Store Rehydrate] Duplicate song ID ${song.id} ("${song.title}") removed from playlist ${playlist.id} ("${playlist.name}").`);
                  }
                });
                return { ...playlist, songs: Array.from(uniqueSongs.values()) };
              });
+             persistedState.playlists = dedupedPlaylists;
 
 
-            // Reset transient state
+            // Reset transient state that shouldn't persist across sessions
             persistedState.isPlaying = false;
             persistedState.currentSong = null;
             persistedState.currentSongIndex = -1;
@@ -666,22 +793,47 @@ export const usePlaylistStore = create<PlaylistState>()(
             persistedState.currentSongProgress = 0;
             persistedState.currentSongDuration = 0;
             persistedState.isInSinglePlayMode = false;
-            persistedState.playlists = dedupedPlaylists; // Apply de-duplicated playlists
 
-            // Ensure activePlaylistId is valid
-             if (persistedState.activePlaylistId && !persistedState.playlists.find(p => p.id === persistedState.activePlaylistId)) {
-                persistedState.activePlaylistId = persistedState.playlists[0]?.id ?? null;
-                console.log(`[Store Rehydrate] Active playlist ID was invalid, reset to: ${persistedState.activePlaylistId}`);
-             } else if (!persistedState.activePlaylistId && persistedState.playlists.length > 0) {
-                 persistedState.activePlaylistId = persistedState.playlists[0].id;
-                 console.log(`[Store Rehydrate] Active playlist ID was null, set to first playlist: ${persistedState.activePlaylistId}`);
+             // Ensure activePlaylistId is valid or default to first/null
+             let activeIdIsValid = false;
+             if (persistedState.activePlaylistId) {
+                 activeIdIsValid = persistedState.playlists.some(p => p.id === persistedState.activePlaylistId);
              }
-            console.log("[Store] State rehydrated and transient state reset complete.");
+
+             if (!activeIdIsValid) {
+                 persistedState.activePlaylistId = persistedState.playlists[0]?.id ?? null;
+                 console.log(`[Store Rehydrate] Active playlist ID was invalid or missing, reset to: ${persistedState.activePlaylistId}`);
+             }
+
+            console.log("[Store] Transient state reset complete.");
           } else {
-             console.log("[Store] No persisted state found.");
+             console.log("[Store] No persisted state found. Initializing with defaults.");
+             // Initialize default state if nothing was persisted (e.g., first load)
+             if (state) { // state here refers to the initial state creator
+                state.playlists = [];
+                state.activePlaylistId = null;
+                state.volume = 0.8;
+                state.isMuted = false;
+                state.isShuffling = false;
+                state.isLooping = false;
+                state.isLoopingPlaylist = false;
+                state.currentSong = null;
+                state.currentSongIndex = -1;
+                state.playHistory = [];
+                state.isPlaying = false;
+                state.currentSongProgress = 0;
+                state.currentSongDuration = 0;
+                state.isInSinglePlayMode = false;
+             }
           }
         };
       },
+      // Optional: Improve logging for state changes
+      // stateMiddleware: (config) => (set, get, api) => config((args) => {
+      //   console.log("[Store Update]", args);
+      //   set(args);
+      //   console.log("[Store New State]", get());
+      // }, get, api),
     }
   )
 );
