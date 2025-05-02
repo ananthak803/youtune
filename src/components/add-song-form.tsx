@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -117,6 +118,9 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
           return song;
       } catch (error: any) {
           console.error('Error fetching and preparing song:', error);
+          if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            throw new Error('Failed to fetch YouTube video metadata. NetworkError when attempting to fetch resource.');
+          }
           throw new Error(`Failed to fetch YouTube video metadata. ${error.message}`);
       }
   };
