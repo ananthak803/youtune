@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: 'YouTune',
   description: 'Spotify-like experience using YouTube audio',
   icons: {
-    icon: '/favicon.svg', // Path relative to the public directory
+    icon: '/favicon.svg', // Use the new SVG favicon from the public directory
   },
 };
 
