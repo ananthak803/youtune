@@ -16,8 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card, CardContent } from '@/components/ui/card'; // Keep Card for individual results
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card } from '@/components/ui/card'; // Keep Card for individual results
 import { useToast } from '@/hooks/use-toast';
 import { searchYoutubeAction } from '@/actions/youtube-actions';
 import type { YoutubeSearchResult, Song, Playlist } from '@/lib/types';
@@ -54,7 +53,7 @@ export function YoutubeSearch() {
   async function onSubmit(values: SearchFormValues) {
     setIsLoading(true);
     setHasSearched(true); // Mark that a search has been attempted
-    // setSearchResults([]); // <-- Removed this line to prevent flickering
+    // setSearchResults([]); // Keep results while loading to avoid flicker
     try {
       const results = await searchYoutubeAction(values.query);
       setSearchResults(results); // Update results only after fetching
@@ -84,6 +83,7 @@ export function YoutubeSearch() {
       title: result.title,
       author: result.author,
       url: `https://www.youtube.com/watch?v=${result.videoId}`,
+      // Ensure we use the correct thumbnail URL (hqdefault used in service now)
       thumbnailUrl: result.thumbnailUrl,
     };
     setSongToAdd(song);
@@ -132,16 +132,15 @@ export function YoutubeSearch() {
 
   return (
     <>
-      {/* Removed the outer Card */}
-      <div className="space-y-6"> {/* Added spacing */}
+      <div className="space-y-4"> {/* Adjusted spacing */}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-2 md:flex-nowrap md:gap-4">
               <FormField
                 control={form.control}
                 name="query"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-[150px]"> {/* Adjusted min-width */}
-                    <FormLabel className="sr-only">Search Term</FormLabel> {/* Hide label visually, keep for accessibility */}
+                  <FormItem className="flex-1 min-w-[150px]">
+                    <FormLabel className="sr-only">Search Term</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="Enter song title, artist..."
@@ -168,30 +167,33 @@ export function YoutubeSearch() {
         )}
 
         {!isLoading && searchResults.length > 0 && (
-          <div className="mt-6"> {/* Added top margin */}
-            <h3 className="text-lg font-semibold mb-3">Results</h3> {/* Adjusted heading size/margin */}
-             {/* ScrollArea is now handled by the parent Sheet */}
-            <div className="space-y-3"> {/* Use space-y for gap */}
+          <div className="mt-4"> {/* Adjusted top margin */}
+            <h3 className="text-lg font-semibold mb-3">Results</h3>
+            <div className="space-y-3">
               {searchResults.map((result) => (
-                <Card key={result.videoId} className="flex items-center p-3 gap-3 overflow-hidden"> {/* Added overflow-hidden */}
-                   <Image
-                        src={result.thumbnailUrl || '/placeholder-album.svg'}
-                        alt={result.title} // Use title as alt text
-                        width={60}
-                        height={45} // Maintain aspect ratio typical for thumbnails
-                        className="rounded flex-shrink-0 object-cover aspect-video" // Ensure object-cover and aspect ratio
-                        data-ai-hint="youtube video thumbnail"
-                        unoptimized // Consider if optimization is needed/possible for external URLs
-                        onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
-                    />
-                  <div className="flex-1 min-w-0"> {/* Ensure this container can shrink */}
+                // Increase vertical padding on the Card for more height
+                <Card key={result.videoId} className="flex items-center p-3 py-4 gap-3 overflow-hidden">
+                   {/* Use a fixed width and aspect ratio for the image container */}
+                   <div className="w-[80px] h-[60px] flex-shrink-0 relative rounded overflow-hidden">
+                       <Image
+                            src={result.thumbnailUrl || '/placeholder-album.svg'}
+                            alt={result.title} // Use title as alt text
+                            fill // Use fill to cover the container
+                            sizes="(max-width: 768px) 80px, 80px" // Provide sizes hint
+                            className="object-cover" // Ensure image covers the area
+                            data-ai-hint="youtube video thumbnail"
+                            unoptimized // Keep unoptimized for external URLs unless configured
+                            onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
+                        />
+                   </div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium truncate text-sm">{result.title}</p>
                     <p className="text-xs text-muted-foreground truncate">{result.author}</p>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground" // Style button
+                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
                     onClick={() => handleInitiateAddSong(result)}
                     aria-label={`Add ${result.title} to playlist`}
                     disabled={isSelectPlaylistDialogOpen || songToAdd?.id === result.videoId}
@@ -210,7 +212,6 @@ export function YoutubeSearch() {
          )}
       </div>
 
-      {/* Playlist Selection Dialog remains unchanged */}
       <SelectPlaylistDialog
         isOpen={isSelectPlaylistDialogOpen}
         onOpenChange={(open) => {

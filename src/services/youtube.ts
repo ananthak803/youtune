@@ -82,9 +82,11 @@ export async function searchYoutubeVideos(query: string, maxResults = 5): Promis
         const videoId = `${query.replace(/\s+/g, '_').substring(0, 5)}_${i}${Math.random().toString(36).substring(2, 7)}`;
         results.push({
             videoId: videoId,
-            title: `${query} - Result ${i + 1}`,
+            // Generate only the title based on the query
+            title: `${query} Example Video ${i + 1}`,
             author: `Search Channel ${i}`,
-            thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/default.jpg`, // Use default thumbnail, might 404
+            // Use hqdefault for potentially better quality
+            thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
         });
     }
 
