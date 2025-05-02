@@ -49,9 +49,8 @@ export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeV
   // Generate placeholder data based on videoId for some variety
   const placeholderTitle = `Video Title for ID: ${videoId.substring(0, 5)}...`;
   const placeholderAuthor = `Channel ${videoId.substring(videoId.length - 3)}`;
-  // Use a placeholder image service or a default YouTube thumbnail URL format
-  // Note: Accessing default thumbnails might have restrictions or change.
-  const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`; // Standard thumbnail URL
+  // Use a standard YouTube thumbnail URL format. This URL points to a real image IF the videoId is valid.
+  const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
   return {
     title: placeholderTitle,
@@ -60,13 +59,29 @@ export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeV
   };
 }
 
+// A list of known valid YouTube video IDs to make placeholder search results more realistic
+const placeholderVideoIds = [
+    'dQw4w9WgXcQ', // Rick Astley - Never Gonna Give You Up
+    'kJQP7kiw5Fk', // Luis Fonsi - Despacito
+    '3tmd-ClpJxA', // Mark Ronson - Uptown Funk
+    'JGwWNGJdvx8', // Ed Sheeran - Shape of You
+    'C0DPdy98e4c', // PSY - GANGNAM STYLE
+    'fregObNcHC8', // Billie Eilish - bad guy
+    '9bZkp7q19f0', // Tones and I - Dance Monkey
+    'RgKAFK5djSk', // Wiz Khalifa - See You Again
+    'hT_nvWreIhg', // Justin Bieber - Sorry
+    '09R8_2nJtjg', // Katy Perry - Roar
+];
+
+
 /**
  * Asynchronously searches YouTube for videos based on a query (placeholder).
  *
  * **Note:** This is a placeholder function. A real implementation would use the
- * YouTube Data API v3 search endpoint.
+ * YouTube Data API v3 search endpoint. This version uses a fixed list of video IDs
+ * to provide results with loadable thumbnails.
  *
- * @param query The search term.
+ * @param query The search term (used to generate titles).
  * @param maxResults The maximum number of results to return (default 5).
  * @returns A promise that resolves to an array of YoutubeSearchResult objects.
  */
@@ -76,19 +91,35 @@ export async function searchYoutubeVideos(query: string, maxResults = 5): Promis
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Generate mock results based on the query
+    // Use the predefined list of valid video IDs
     const results: YoutubeSearchResult[] = [];
-    for (let i = 0; i < maxResults; i++) {
-        const videoId = `${query.replace(/\s+/g, '_').substring(0, 5)}_${i}${Math.random().toString(36).substring(2, 7)}`;
+    const numIdsToUse = Math.min(maxResults, placeholderVideoIds.length);
+
+    for (let i = 0; i < numIdsToUse; i++) {
+        const videoId = placeholderVideoIds[i];
         results.push({
             videoId: videoId,
-            // Generate only the title based on the query
-            title: `${query} Example Video ${i + 1}`,
-            author: `Search Channel ${i}`,
-            // Use hqdefault for potentially better quality
+            // Generate a title based on the query for relevance, but use a real ID
+            title: `${query} - Result ${i + 1}`,
+            author: `Sample Channel ${i + 1}`,
+            // Use the standard thumbnail URL format with the *real* video ID
             thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
         });
     }
 
-    return results;
+    // If maxResults is greater than the number of placeholder IDs, pad with less specific placeholders
+    for (let i = numIdsToUse; i < maxResults; i++) {
+         const randomSuffix = Math.random().toString(36).substring(2, 7);
+         // Use a generic ID known not to exist, forcing fallback in UI
+         const fakeVideoId = `fake_${randomSuffix}`;
+         results.push({
+             videoId: fakeVideoId,
+             title: `${query} - More Result ${i + 1}`,
+             author: `Another Channel ${i + 1}`,
+             thumbnailUrl: `https://i.ytimg.com/vi/${fakeVideoId}/hqdefault.jpg`, // This will likely 404
+         });
+     }
+
+
+    return results.slice(0, maxResults); // Ensure we don't exceed maxResults
 }
