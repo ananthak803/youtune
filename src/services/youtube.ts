@@ -88,28 +88,28 @@ async function fetchYoutubeAPI(endpoint: string, params: Record<string, string>)
  * @returns A promise that resolves to a YoutubeVideoMetadata object containing actual metadata.
  * @throws An error if the API call fails or the video is not found.
  */
-export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeVideoMetadata> {
-  console.log(`[YouTube Service] Fetching metadata for video ID: ${videoId}`);
-  const params = {
-    part: 'snippet',
-    id: videoId,
-  };
+// export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeVideoMetadata> {
+//   console.log(`[YouTube Service] Fetching metadata for video ID: ${videoId}`);
+//   const params = {
+//     part: 'snippet',
+//     id: videoId,
+//   };
 
-  const data = await fetchYoutubeAPI('videos', params);
+//   const data = await fetchYoutubeAPI('videos', params);
 
-  if (!data.items || data.items.length === 0) {
-    throw new Error(`Video with ID ${videoId} not found.`);
-  }
+//   if (!data.items || data.items.length === 0) {
+//     throw new Error(`Video with ID ${videoId} not found.`);
+//   }
 
-  const snippet = data.items[0].snippet;
-  const thumbnailUrl = snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '/placeholder-album.svg'; // Fallback
+//   const snippet = data.items[0].snippet;
+//   const thumbnailUrl = snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '/placeholder-album.svg'; // Fallback
 
-  return {
-    title: snippet.title || 'Unknown Title',
-    author: snippet.channelTitle || 'Unknown Artist',
-    thumbnailUrl: thumbnailUrl,
-  };
-}
+//   return {
+//     title: snippet.title || 'Unknown Title',
+//     author: snippet.channelTitle || 'Unknown Artist',
+//     thumbnailUrl: thumbnailUrl,
+//   };
+// }
 
 
 /**
@@ -157,3 +157,4 @@ export async function searchYoutubeVideos(query: string, maxResults = 5): Promis
     console.log(`[YouTube Service] Found ${results.length} valid results for query "${query}".`);
     return results;
 }
+

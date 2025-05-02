@@ -16,8 +16,7 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { usePlaylistStore } from '@/store/playlist-store';
-import { getYoutubeVideoMetadata } from '@/services/youtube';
-import type { Song, Playlist } from '@/lib/types';
+import type { Song } from '@/lib/types';
 import { Play } from 'lucide-react';
 import { SelectPlaylistDialog } from './select-playlist-dialog'; // Import the new dialog
 
@@ -41,6 +40,13 @@ interface AddSongFormProps {
   // selectedPlaylistId is no longer directly needed here for adding,
   // but could be kept if needed for other features (e.g., highlighting the current playlist)
   selectedPlaylistId: string | null; // Keep for context, but adding logic will change
+}
+
+// Simple interface for the data returned by the CORS proxy
+interface YoutubeDLResponse {
+  title: string;
+  author: string;
+  thumbnail: string;
 }
 
 export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
@@ -86,19 +92,33 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
   };
 
   const fetchAndPrepareSong = async (urlValue: string): Promise<Song | null> => {
-    const videoId = extractVideoId(urlValue);
-    if (!videoId) {
-      throw new Error('Could not extract video ID from URL.');
-    }
-    const metadata = await getYoutubeVideoMetadata(videoId);
-    const song: Song = {
-      id: videoId,
-      title: metadata.title,
-      author: metadata.author,
-      url: `https://www.youtube.com/watch?v=${videoId}`, // Use canonical URL
-      thumbnailUrl: metadata.thumbnailUrl,
-    };
-    return song;
+      const videoId = extractVideoId(urlValue);
+      if (!videoId) {
+          throw new Error('Could not extract video ID from URL.');
+      }
+
+      // Use a CORS proxy to fetch the video metadata without an API key
+      const corsProxyUrl = `https://youtube-dl-web.rshanmukh.workers.dev/json?url=https://www.youtube.com/watch?v=${videoId}`;
+
+      try {
+          const response = await fetch(corsProxyUrl);
+          if (!response.ok) {
+              throw new Error(`Failed to fetch metadata from CORS proxy: ${response.status} - ${response.statusText}`);
+          }
+          const data: YoutubeDLResponse = await response.json();
+
+          const song: Song = {
+              id: videoId,
+              title: data.title,
+              author: data.author,
+              url: `https://www.youtube.com/watch?v=${videoId}`, // Use canonical URL
+              thumbnailUrl: data.thumbnail,
+          };
+          return song;
+      } catch (error: any) {
+          console.error('Error fetching and preparing song:', error);
+          throw new Error(`Failed to fetch YouTube video metadata. ${error.message}`);
+      }
   };
 
   // Handles the final step of adding the song after playlist selection (if needed)
@@ -287,3 +307,4 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
     </>
   );
 }
+
