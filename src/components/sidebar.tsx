@@ -2,24 +2,24 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, ListMusic } from 'lucide-react';
+import { Plus, ListMusic, Music2 } from 'lucide-react'; // Added Music2 for title
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { Playlist } from '@/lib/types';
 import { CreatePlaylistDialog } from './create-playlist-dialog';
 import { usePlaylistStore } from '@/store/playlist-store';
+import { Separator } from '@/components/ui/separator'; // Import Separator
 
 interface SidebarProps {
   playlists: Playlist[];
   selectedPlaylistId: string | null; // ID of the playlist currently being *viewed*
   onSelectPlaylist: (playlist: Playlist) => void; // Callback when a playlist is selected for *viewing*
-  // onCreatePlaylist is handled directly by the store
 }
 
 export function Sidebar({
   playlists,
-  selectedPlaylistId, // This is the ID of the playlist being viewed
+  selectedPlaylistId,
   onSelectPlaylist,
 }: SidebarProps) {
   const createPlaylist = usePlaylistStore((state) => state.createPlaylist);
@@ -32,43 +32,57 @@ export function Sidebar({
     }
   };
 
-
   return (
-    <aside className="w-64 flex-shrink-0 border-r border-border bg-card p-4 flex flex-col">
-      <h2 className="text-2xl font-bold mb-6">YouTune</h2>
+    <aside className="w-60 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-screen"> {/* Use sidebar theme, adjust width/padding */}
+      {/* App Title */}
+      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-2">
+          <Music2 className="h-6 w-6 text-accent" /> {/* Use Accent color for icon */}
+          <h1 className="text-xl font-bold text-primary">YouTune</h1> {/* Use Primary text color */}
+      </div>
 
-      <Button
-        variant="ghost"
-        className="w-full justify-start mb-4"
-        onClick={() => setIsCreateDialogOpen(true)}
-      >
-        <Plus className="mr-2 h-4 w-4" />
-        Create Playlist
-      </Button>
 
-      <h3 className="text-sm font-semibold text-muted-foreground mb-2 px-2">Playlists</h3>
-      <ScrollArea className="flex-1">
-        <nav className="flex flex-col gap-1 pr-2">
+      {/* Playlist List */}
+      <ScrollArea className="flex-1 mb-3"> {/* Add margin-bottom */}
+        <nav className="flex flex-col gap-1 px-1"> {/* Adjust padding */}
           {playlists.map((playlist) => (
             <Button
               key={playlist.id}
-              // Highlight based on the selectedPlaylistId prop (the viewed playlist)
+              // Use sidebar-accent for selected background
               variant={selectedPlaylistId === playlist.id ? 'secondary' : 'ghost'}
               className={cn(
-                'w-full justify-start truncate',
-                selectedPlaylistId === playlist.id && 'font-semibold' // Keep font-semibold, rely on variant for color
+                'w-full justify-start h-9 rounded-md text-sm', // Slightly smaller height, standard rounding
+                selectedPlaylistId === playlist.id
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' // Use sidebar specific colors
+                    : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80', // Adjust hover and default text
+                'truncate'
               )}
-              onClick={() => onSelectPlaylist(playlist)} // Trigger the view change callback
+              onClick={() => onSelectPlaylist(playlist)}
             >
               <ListMusic className="mr-2 h-4 w-4 flex-shrink-0" />
               <span className="truncate">{playlist.name}</span>
             </Button>
           ))}
            {playlists.length === 0 && (
-             <p className="text-sm text-muted-foreground px-2 mt-2">No playlists yet. Create one!</p>
+             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center">No playlists yet.</p> // Adjusted text style
            )}
         </nav>
       </ScrollArea>
+
+      {/* Separator */}
+       <Separator className="my-2 bg-sidebar-border" />
+
+      {/* Create Playlist Button at Bottom */}
+      <div className="mt-auto pb-1 px-1"> {/* mt-auto pushes to bottom, add padding */}
+         <Button
+            variant="ghost" // Use ghost variant for subtle look
+            className="w-full justify-start h-9 rounded-md text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" // Match playlist item style
+            onClick={() => setIsCreateDialogOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Playlist
+          </Button>
+      </div>
+
 
        <CreatePlaylistDialog
         isOpen={isCreateDialogOpen}
@@ -78,3 +92,4 @@ export function Sidebar({
     </aside>
   );
 }
+
