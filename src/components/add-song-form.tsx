@@ -182,7 +182,7 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
         // Keep isLoading true until a playlist is selected in the dialog
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error preparing song:', error);
       toast({
         title: 'Error Preparing Song',
@@ -311,4 +311,3 @@ export function AddSongForm({ selectedPlaylistId }: AddSongFormProps) {
     </>
   );
 }
-
