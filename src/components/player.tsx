@@ -22,6 +22,20 @@ import { usePlaylistStore, setPlayerRef } from '@/store/playlist-store'; // Impo
 import { cn } from '@/lib/utils';
 import type { Song } from '@/lib/types';
 
+// Simple debounce function
+const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  return (...args: Parameters<F>): Promise<ReturnType<F>> =>
+    new Promise((resolve) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => resolve(func(...args)), waitFor);
+    });
+};
+
+
 export function Player() {
   const {
     currentSong,
@@ -70,9 +84,8 @@ export function Player() {
   const playerRef = useRef<ReactPlayer>(null);
   const [seeking, setSeeking] = useState(false);
   const [localVolume, setLocalVolume] = useState(volume);
-  // Removed showVolumeSlider state
   const [hasMounted, setHasMounted] = useState(false);
-
+  const currentSongIdRef = useRef<string | null>(null); // Ref to track current song ID for progress updates
 
   // --- Effects ---
   useEffect(() => {
@@ -88,28 +101,57 @@ export function Player() {
     }
   }, [volume, seeking]);
 
+  useEffect(() => {
+     // Update the ref whenever the current song changes
+     currentSongIdRef.current = currentSong?.id ?? null;
+      // Reset progress and duration visually if song becomes null
+     if (!currentSong) {
+         setCurrentSongProgress(0);
+         setCurrentSongDuration(0);
+     }
+  }, [currentSong, setCurrentSongProgress, setCurrentSongDuration]);
+
  // --- Handlers ---
+
+ // Debounce progress handler slightly to avoid race condition on song change
+ const debouncedSetCurrentSongProgress = useCallback(
+    debounce((progress: number, songId: string | null) => {
+        // Only update progress if the song ID hasn't changed since the update was scheduled
+        if (songId === currentSongIdRef.current && songId !== null) {
+           setCurrentSongProgress(progress);
+        }
+    }, 50), // 50ms debounce, adjust as needed
+    [setCurrentSongProgress]
+ );
+
+
  const handleProgress = useCallback(
     (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number; }) => {
         // Check if the component is still mounted and player exists
-        if (!seeking && playerRef.current && hasMounted) {
-            // Only update progress if the song hasn't ended naturally
-            // (ReactPlayer might send one last progress update slightly after onEnded)
-            // Add a small tolerance
-             const duration = currentSongDuration || 0;
-             if (duration === 0 || state.playedSeconds < duration - 0.1) {
-                setCurrentSongProgress(state.playedSeconds);
+        if (!seeking && playerRef.current && hasMounted && currentSongIdRef.current) {
+            const duration = currentSongDuration || 0;
+             // Check if the progress corresponds to the currently loaded song ID
+             // And check if progress is within valid bounds (considering potential small inaccuracies)
+             if (duration > 0 && state.playedSeconds >= 0 && state.playedSeconds <= duration + 0.5) {
+                // Use the debounced function to update the progress
+                debouncedSetCurrentSongProgress(state.playedSeconds, currentSongIdRef.current);
+             } else if (duration === 0 && state.playedSeconds === 0) {
+                // Allow setting progress to 0 when duration is not yet known or song just started
+                debouncedSetCurrentSongProgress(0, currentSongIdRef.current);
              }
         }
     },
-    [seeking, setCurrentSongProgress, hasMounted, currentSongDuration]
+    [seeking, hasMounted, currentSongDuration, debouncedSetCurrentSongProgress]
 );
 
 
   const handleDuration = useCallback(
     (duration: number) => {
-       if (hasMounted) { // Ensure component is mounted
-         setCurrentSongDuration(duration);
+       if (hasMounted && currentSongIdRef.current) { // Ensure component is mounted and there's a song
+           // Only update duration if it's for the correct song
+           // This check is implicitly handled by currentSongIdRef usage in handleProgress
+           // and the useEffect that resets duration when song becomes null.
+           setCurrentSongDuration(duration);
        }
     },
     [setCurrentSongDuration, hasMounted]
@@ -117,28 +159,31 @@ export function Player() {
 
     const handleEnded = useCallback(() => {
         if (hasMounted) { // Ensure component is mounted
-            playNextSong();
+            // Don't reset progress here, let playNextSong handle it if a new song plays
+             playNextSong();
         }
     }, [playNextSong, hasMounted]);
 
 
   const handleSeekMouseDown = () => {
+     if (!currentSong) return;
     setSeeking(true);
   };
 
   const handleSeekChange = (value: number[]) => {
-     if (playerRef.current && hasMounted) {
-       setCurrentSongProgress(value[0]);
-     }
+     if (!currentSong || !hasMounted) return;
+     // Update the visual progress immediately while seeking
+     setCurrentSongProgress(value[0]);
   };
 
   const handleSeekMouseUp = (value: number[]) => {
-    if (playerRef.current && hasMounted) {
+    if (playerRef.current && hasMounted && currentSong) {
       const seekTime = value[0];
       playerRef.current.seekTo(seekTime);
       setCurrentSongProgress(seekTime); // Ensure final update
     }
-    setSeeking(false);
+    // Delay setting seeking to false slightly to allow final progress update
+    setTimeout(() => setSeeking(false), 50);
   };
 
 
@@ -184,6 +229,9 @@ export function Player() {
 
   // Determine if playlist controls should be disabled
   const disablePlaylistControls = isInSinglePlayMode || !currentSong;
+
+  const displayProgress = currentSong ? currentSongProgress : 0;
+  const displayDuration = currentSong ? currentSongDuration : 0;
 
 
   return (
@@ -264,7 +312,7 @@ export function Player() {
               size="icon"
               onClick={playPreviousSong}
               className="h-8 w-8"
-              disabled={disablePlaylistControls && currentSongProgress <= 3} // Allow restarting in single mode
+              disabled={!currentSong} // Can always restart or go back if there's a song
               aria-label="Previous song / Restart"
             >
               <SkipBack className="h-4 w-4" />
@@ -284,7 +332,7 @@ export function Player() {
               size="icon"
               onClick={playNextSong}
               className="h-8 w-8"
-              disabled={disablePlaylistControls} // Disable next in single play mode
+              disabled={!currentSong} // Can always skip if there's a song (might stop if at end)
               aria-label="Next song"
             >
               <SkipForward className="h-4 w-4" />
@@ -303,35 +351,42 @@ export function Player() {
           </div>
           <div className="flex w-full max-w-md items-center gap-2">
             <span className="text-xs text-muted-foreground w-10 text-right">
-              {formatTime(currentSongProgress)}
+              {formatTime(displayProgress)}
             </span>
             <Slider
-              value={[currentSongProgress]}
-              max={currentSongDuration || 1}
-              step={1}
+              // Use displayProgress which resets to 0 when currentSong is null
+              value={[displayProgress]}
+              // Use displayDuration which resets to 0, ensuring max is at least 1 for slider rendering
+              max={Math.max(displayDuration, 1)}
+              step={0.1} // Finer step for smoother seeking
               className="flex-1 [&>span:first-child]:h-1 [&>span:first-child>span]:h-1 [&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button:hover]:scale-110"
-              onValueChange={handleSeekChange}
+              onValueChange={handleSeekChange} // Update visually on change
               onPointerDown={handleSeekMouseDown}
               onPointerUp={(e) => {
-                // Find the thumb button within the slider to get its value
-                const sliderElement = e.currentTarget as HTMLElement;
-                const thumb = sliderElement.querySelector('[role="slider"]');
-                if (thumb) {
-                   const valueStr = thumb.getAttribute('aria-valuenow');
-                   if (valueStr) {
-                       handleSeekMouseUp([parseFloat(valueStr)]);
-                   }
-                }
-                // Fallback if thumb isn't found easily (less reliable)
-                // else if (e.target instanceof HTMLSpanElement && e.target.parentElement?.matches('[data-radix-slider-track]')) {
-                //    // Estimate based on click position - more complex
-                // }
-             }}
+                    // Read value from the slider itself on pointer up for accuracy
+                    const sliderElement = e.currentTarget as HTMLElement;
+                    const track = sliderElement.querySelector('[data-radix-slider-track]');
+                    const thumb = sliderElement.querySelector('[role="slider"]');
+                    if (thumb && track) {
+                        const trackRect = track.getBoundingClientRect();
+                        const thumbRect = thumb.getBoundingClientRect();
+                        // Calculate percentage based on thumb center relative to track start
+                        const thumbCenter = thumbRect.left + thumbRect.width / 2;
+                        const percentage = (thumbCenter - trackRect.left) / trackRect.width;
+                        const maxValue = Math.max(displayDuration, 1);
+                        const seekValue = Math.max(0, Math.min(maxValue, percentage * maxValue));
+                         handleSeekMouseUp([seekValue]);
+                    } else {
+                         // Fallback: use the last known value from onValueChange if needed
+                         handleSeekMouseUp([displayProgress]);
+                         console.warn("Could not accurately determine seek value on pointer up.");
+                    }
+               }}
               disabled={!currentSong || !currentSongDuration}
               aria-label="Song progress"
             />
             <span className="text-xs text-muted-foreground w-10 text-left">
-              {formatTime(currentSongDuration)}
+              {formatTime(displayDuration)}
             </span>
           </div>
         </div>
