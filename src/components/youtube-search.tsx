@@ -53,7 +53,8 @@ export function YoutubeSearch() {
   async function onSubmit(values: SearchFormValues) {
     setIsLoading(true);
     setHasSearched(true); // Mark that a search has been attempted
-    // setSearchResults([]); // Keep results while loading to avoid flicker
+    // Keep previous results while loading to avoid flicker/layout shift
+    // setSearchResults([]);
     try {
       const results = await searchYoutubeAction(values.query);
       setSearchResults(results); // Update results only after fetching
@@ -182,7 +183,6 @@ export function YoutubeSearch() {
                             sizes="(max-width: 768px) 80px, 80px" // Provide sizes hint
                             className="object-cover" // Ensure image covers the area
                             data-ai-hint="youtube video thumbnail"
-                            // unoptimized // Keep unoptimized for external URLs unless configured (Removed as i.ytimg.com is configured)
                             onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
                         />
                    </div>
@@ -193,7 +193,7 @@ export function YoutubeSearch() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground" // Button is always rendered here
+                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground transition-opacity" // Removed opacity classes
                     onClick={() => handleInitiateAddSong(result)}
                     aria-label={`Add "${result.title}" to playlist`}
                     // Disable if the selection dialog is open OR if this specific song is the one currently being processed for adding
