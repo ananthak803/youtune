@@ -42,6 +42,7 @@ export function YoutubeSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSelectPlaylistDialogOpen, setIsSelectPlaylistDialogOpen] = useState(false);
   const [songToAdd, setSongToAdd] = useState<Song | null>(null); // Song derived from search result
+  const [hasSearched, setHasSearched] = useState(false); // Track if a search has been performed
 
   const form = useForm<SearchFormValues>({
     resolver: zodResolver(searchSchema),
@@ -52,10 +53,11 @@ export function YoutubeSearch() {
 
   async function onSubmit(values: SearchFormValues) {
     setIsLoading(true);
-    setSearchResults([]); // Clear previous results
+    setHasSearched(true); // Mark that a search has been attempted
+    // setSearchResults([]); // <-- Removed this line to prevent flickering
     try {
       const results = await searchYoutubeAction(values.query);
-      setSearchResults(results);
+      setSearchResults(results); // Update results only after fetching
       if (results.length === 0) {
         toast({
           title: 'No Results',
@@ -69,6 +71,7 @@ export function YoutubeSearch() {
         description: error instanceof Error ? error.message : 'Could not perform search.',
         variant: 'destructive',
       });
+      setSearchResults([]); // Clear results on error
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +141,7 @@ export function YoutubeSearch() {
                 name="query"
                 render={({ field }) => (
                   <FormItem className="flex-1 min-w-[150px]"> {/* Adjusted min-width */}
-                    <FormLabel>Search Term</FormLabel>
+                    <FormLabel className="sr-only">Search Term</FormLabel> {/* Hide label visually, keep for accessibility */}
                     <FormControl>
                       <Input
                         placeholder="Enter song title, artist..."
@@ -170,24 +173,25 @@ export function YoutubeSearch() {
              {/* ScrollArea is now handled by the parent Sheet */}
             <div className="space-y-3"> {/* Use space-y for gap */}
               {searchResults.map((result) => (
-                <Card key={result.videoId} className="flex items-center p-3 gap-3">
+                <Card key={result.videoId} className="flex items-center p-3 gap-3 overflow-hidden"> {/* Added overflow-hidden */}
                    <Image
                         src={result.thumbnailUrl || '/placeholder-album.svg'}
-                        alt={result.title}
+                        alt={result.title} // Use title as alt text
                         width={60}
-                        height={45}
-                        className="rounded flex-shrink-0 object-cover"
+                        height={45} // Maintain aspect ratio typical for thumbnails
+                        className="rounded flex-shrink-0 object-cover aspect-video" // Ensure object-cover and aspect ratio
                         data-ai-hint="youtube video thumbnail"
+                        unoptimized // Consider if optimization is needed/possible for external URLs
                         onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
                     />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0"> {/* Ensure this container can shrink */}
                     <p className="font-medium truncate text-sm">{result.title}</p>
                     <p className="text-xs text-muted-foreground truncate">{result.author}</p>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0"
+                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground" // Style button
                     onClick={() => handleInitiateAddSong(result)}
                     aria-label={`Add ${result.title} to playlist`}
                     disabled={isSelectPlaylistDialogOpen || songToAdd?.id === result.videoId}
@@ -200,7 +204,8 @@ export function YoutubeSearch() {
           </div>
         )}
 
-         {!isLoading && searchResults.length === 0 && form.formState.isSubmitted && (
+         {/* Show "No results found" only if a search was done and there are no results */}
+         {!isLoading && hasSearched && searchResults.length === 0 && (
              <p className="text-muted-foreground text-sm text-center mt-6">No results found.</p>
          )}
       </div>
