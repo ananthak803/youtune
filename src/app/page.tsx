@@ -78,7 +78,7 @@ export default function Home() {
            </Sheet>
 
           <ScrollArea className="flex-1">
-            <div className="container mx-auto px-4 py-8 md:px-8">
+            <div className="container mx-auto px-4 pt-16 pb-8 md:px-8"> {/* Increased pt from py-8 to add space below the top-right button */}
               {/* AddSongForm doesn't need the viewed playlist ID for adding songs anymore */}
               <AddSongForm selectedPlaylistId={null} />
 
