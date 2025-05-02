@@ -26,100 +26,134 @@ export interface YoutubeSearchResult {
     thumbnailUrl: string;
 }
 
+// --- Constants ---
+const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
+
+// --- Helper Functions ---
 
 /**
- * Asynchronously retrieves *placeholder* metadata for a given YouTube video ID.
- *
- * **Note:** This is a placeholder function. In a real application, this would
- * involve calling the YouTube Data API v3 (or using a backend service that does)
- * to fetch actual video details. This requires setting up API keys, handling quotas,
- * and potentially server-side logic to avoid exposing keys on the client.
- *
- * This placeholder generates predictable data based on the video ID for demonstration.
+ * Fetches data from the YouTube API.
+ * @param endpoint The API endpoint (e.g., 'search', 'videos').
+ * @param params URL parameters for the API call.
+ * @returns A promise resolving to the JSON response.
+ * @throws An error if the API key is missing or the fetch fails.
+ */
+async function fetchYoutubeAPI(endpoint: string, params: Record<string, string>): Promise<any> {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+        console.error('YouTube API key (YOUTUBE_API_KEY) is missing in environment variables.');
+        throw new Error('Server configuration error: YouTube API key is missing.');
+    }
+
+    const url = new URL(`${YOUTUBE_API_BASE_URL}/${endpoint}`);
+    url.searchParams.set('key', apiKey);
+    for (const key in params) {
+        url.searchParams.set(key, params[key]);
+    }
+
+    try {
+        // console.log(`[YouTube Service] Fetching: ${url.toString()}`); // Debug log
+        const response = await fetch(url.toString(), {
+            // Consider adding caching headers if appropriate for your usage pattern
+            // cache: 'force-cache', // Example: Aggressive caching
+             next: { revalidate: 3600 } // Example: Revalidate data every hour
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Unknown API error' }));
+            console.error(`[YouTube Service] API Error (${response.status}):`, errorData);
+            throw new Error(`YouTube API Error: ${errorData?.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        // console.log(`[YouTube Service] API Response for ${endpoint}:`, data); // Debug log
+        return data;
+
+    } catch (error) {
+        console.error(`[YouTube Service] Fetch failed for ${endpoint}:`, error);
+        if (error instanceof Error && error.message.startsWith('YouTube API Error:')) {
+            throw error; // Re-throw specific API errors
+        }
+        throw new Error('Failed to fetch data from YouTube.');
+    }
+}
+
+
+// --- Core Service Functions ---
+
+/**
+ * Asynchronously retrieves actual metadata for a given YouTube video ID using the YouTube Data API.
  *
  * @param videoId The ID of the YouTube video.
- * @returns A promise that resolves to a YoutubeVideoMetadata object containing placeholder metadata.
+ * @returns A promise that resolves to a YoutubeVideoMetadata object containing actual metadata.
+ * @throws An error if the API call fails or the video is not found.
  */
 export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeVideoMetadata> {
-  console.warn("Using placeholder function for getYoutubeVideoMetadata. Implement actual API call for production.");
+  console.log(`[YouTube Service] Fetching metadata for video ID: ${videoId}`);
+  const params = {
+    part: 'snippet',
+    id: videoId,
+  };
 
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 150));
+  const data = await fetchYoutubeAPI('videos', params);
 
-  // Generate placeholder data based on videoId for some variety
-  const placeholderTitle = `Video Title for ID: ${videoId.substring(0, 5)}...`;
-  const placeholderAuthor = `Channel ${videoId.substring(videoId.length - 3)}`;
-  // Use a standard YouTube thumbnail URL format. This URL points to a real image IF the videoId is valid.
-  const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  if (!data.items || data.items.length === 0) {
+    throw new Error(`Video with ID ${videoId} not found.`);
+  }
+
+  const snippet = data.items[0].snippet;
+  const thumbnailUrl = snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '/placeholder-album.svg'; // Fallback
 
   return {
-    title: placeholderTitle,
+    title: snippet.title || 'Unknown Title',
+    author: snippet.channelTitle || 'Unknown Artist',
     thumbnailUrl: thumbnailUrl,
-    author: placeholderAuthor,
   };
 }
 
-// A list of known valid YouTube video IDs to make placeholder search results more realistic
-const placeholderVideoIds = [
-    'dQw4w9WgXcQ', // Rick Astley - Never Gonna Give You Up
-    'kJQP7kiw5Fk', // Luis Fonsi - Despacito
-    '3tmd-ClpJxA', // Mark Ronson - Uptown Funk
-    'JGwWNGJdvx8', // Ed Sheeran - Shape of You
-    'C0DPdy98e4c', // PSY - GANGNAM STYLE
-    'fregObNcHC8', // Billie Eilish - bad guy
-    '9bZkp7q19f0', // Tones and I - Dance Monkey
-    'RgKAFK5djSk', // Wiz Khalifa - See You Again
-    'hT_nvWreIhg', // Justin Bieber - Sorry
-    '09R8_2nJtjg', // Katy Perry - Roar
-];
-
 
 /**
- * Asynchronously searches YouTube for videos based on a query (placeholder).
+ * Asynchronously searches YouTube for videos based on a query using the YouTube Data API.
  *
- * **Note:** This is a placeholder function. A real implementation would use the
- * YouTube Data API v3 search endpoint. This version uses a fixed list of video IDs
- * to provide results with loadable thumbnails.
- *
- * @param query The search term (used to generate titles).
+ * @param query The search term.
  * @param maxResults The maximum number of results to return (default 5).
  * @returns A promise that resolves to an array of YoutubeSearchResult objects.
  */
 export async function searchYoutubeVideos(query: string, maxResults = 5): Promise<YoutubeSearchResult[]> {
-    console.warn("Using placeholder function for searchYoutubeVideos. Implement actual API call for production.");
+    console.log(`[YouTube Service] Searching for query: "${query}", maxResults: ${maxResults}`);
+    const params = {
+        part: 'snippet',
+        q: query,
+        type: 'video', // Ensure we only get videos
+        maxResults: maxResults.toString(),
+    };
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 300));
+    const data = await fetchYoutubeAPI('search', params);
 
-    // Use the predefined list of valid video IDs
-    const results: YoutubeSearchResult[] = [];
-    const numIdsToUse = Math.min(maxResults, placeholderVideoIds.length);
-
-    for (let i = 0; i < numIdsToUse; i++) {
-        const videoId = placeholderVideoIds[i];
-        results.push({
-            videoId: videoId,
-            // Generate a title based on the query for relevance, but use a real ID
-            title: `${query} - Result ${i + 1}`,
-            author: `Sample Channel ${i + 1}`,
-            // Use the standard thumbnail URL format with the *real* video ID
-            thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        });
+    if (!data.items) {
+        console.log('[YouTube Service] No items found in search results.');
+        return [];
     }
 
-    // If maxResults is greater than the number of placeholder IDs, pad with less specific placeholders
-    for (let i = numIdsToUse; i < maxResults; i++) {
-         const randomSuffix = Math.random().toString(36).substring(2, 7);
-         // Use a generic ID known not to exist, forcing fallback in UI
-         const fakeVideoId = `fake_${randomSuffix}`;
-         results.push({
-             videoId: fakeVideoId,
-             title: `${query} - More Result ${i + 1}`,
-             author: `Another Channel ${i + 1}`,
-             thumbnailUrl: `https://i.ytimg.com/vi/${fakeVideoId}/hqdefault.jpg`, // This will likely 404
-         });
-     }
+    const results: YoutubeSearchResult[] = data.items
+        .map((item: any) => {
+            if (!item.id?.videoId || !item.snippet) {
+                // Skip items that don't look like valid video search results
+                console.warn('[YouTube Service] Skipping invalid search result item:', item);
+                return null;
+            }
+            const snippet = item.snippet;
+            const thumbnailUrl = snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '/placeholder-album.svg'; // Fallback
 
+            return {
+                videoId: item.id.videoId,
+                title: snippet.title || 'Unknown Title',
+                author: snippet.channelTitle || 'Unknown Channel',
+                thumbnailUrl: thumbnailUrl,
+            };
+        })
+        .filter((result: YoutubeSearchResult | null): result is YoutubeSearchResult => result !== null); // Filter out any nulls from invalid items
 
-    return results.slice(0, maxResults); // Ensure we don't exceed maxResults
+    console.log(`[YouTube Service] Found ${results.length} valid results for query "${query}".`);
+    return results;
 }
