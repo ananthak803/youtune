@@ -19,3 +19,15 @@ export interface YoutubeSearchResult {
     author: string; // Channel name
     thumbnailUrl: string;
 }
+
+// Added for YouTube video metadata (used by URL add feature)
+export interface YoutubeVideoMetadata {
+  title: string;
+  thumbnailUrl: string;
+  author: string;
+}
+
+// Represents a song within the playback queue
+export interface QueueSong extends Song {
+  queueId: string; // Unique identifier for this instance in the queue
+}

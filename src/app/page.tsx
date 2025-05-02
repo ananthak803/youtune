@@ -5,15 +5,16 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
-// import { AddSongForm } from '@/components/add-song-form'; // Removed import
+import { AddSongForm } from '@/components/add-song-form'; // Re-import AddSongForm
 import { YoutubeSearch } from '@/components/youtube-search'; // Import the search component
+import { QueueView } from '@/components/queue-view'; // Import QueueView
 import type { Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator'; // Import Separator
 import { Button } from '@/components/ui/button'; // Import Button
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet'; // Import Sheet components
-import { Plus, ListMusic, Search, Settings } from 'lucide-react'; // Import required icons
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from '@/components/ui/sheet'; // Import Sheet components
+import { Plus, ListMusic, Search, Settings, ListOrdered } from 'lucide-react'; // Import required icons (incl ListOrdered)
 import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
 
 export default function Home() {
@@ -26,6 +27,7 @@ export default function Home() {
   const [selectedPlaylistForView, setSelectedPlaylistForView] = useState<Playlist | null>(null);
   const [isSearchSidebarOpen, setIsSearchSidebarOpen] = useState(false); // State for search sidebar
   const [isPlaylistSheetOpen, setIsPlaylistSheetOpen] = useState(false); // State for mobile playlist sheet
+  const [isQueueSidebarOpen, setIsQueueSidebarOpen] = useState(false); // State for queue sidebar
 
   const isMobile = useIsMobile(); // Check if mobile
 
@@ -74,33 +76,61 @@ export default function Home() {
                <Button
                  variant="ghost"
                  size="sm"
-                 className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground flex items-center gap-2 px-3"
+                 className="absolute top-4 right-16 sm:right-20 z-10 text-muted-foreground hover:text-foreground flex items-center gap-2 px-3" // Adjusted position
                  aria-label="Search YouTube"
                >
                  <Search className="h-4 w-4" />
-                 <span className="hidden sm:inline">Search YouTube</span> {/* Hide text on extra small screens */}
+                 <span className="hidden sm:inline">Search</span> {/* Shorter text */}
                </Button>
+             </SheetTrigger>
+             <SheetContent side="right" className="w-full sm:max-w-lg md:max-w-xl flex flex-col p-0">
+               <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 border-b">
+                  <SheetTitle>Search YouTube</SheetTitle>
+                  <SheetDescription>
+                    Find videos and add them to your playlists.
+                  </SheetDescription>
+                </SheetHeader>
+               <div className="flex-1 overflow-hidden flex flex-col">
+                  <YoutubeSearch />
+               </div>
+               <SheetClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                 <span className="sr-only">Close</span>
+               </SheetClose>
+             </SheetContent>
+           </Sheet>
+
+            {/* Button to open Queue */}
+            <Sheet open={isQueueSidebarOpen} onOpenChange={setIsQueueSidebarOpen}>
+             <SheetTrigger asChild>
+                <Button
+                 variant="ghost"
+                 size="icon"
+                 className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground" // Adjusted position
+                 aria-label="Show queue"
+                >
+                 <ListOrdered className="h-5 w-5" />
+                </Button>
              </SheetTrigger>
              <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
                <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 border-b">
-                 <SheetTitle>Search YouTube</SheetTitle>
-                 <SheetDescription>
-                   Find videos and add them to your playlists.
-                 </SheetDescription>
+                 <SheetTitle>Playback Queue</SheetTitle>
+                 <SheetDescription>See what's playing next.</SheetDescription>
                </SheetHeader>
-               <div className="flex-1 overflow-hidden flex flex-col"> {/* Removed px-4 */}
-                  <YoutubeSearch />
-               </div>
+               <QueueView /> {/* Add QueueView */}
+                <SheetClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                 <span className="sr-only">Close</span>
+               </SheetClose>
              </SheetContent>
            </Sheet>
 
           <ScrollArea className="flex-1">
-             {/* Adjusted padding for mobile */}
             <div className="container mx-auto px-4 pt-16 pb-8 md:px-8">
 
-              {/* Removed AddSongForm component */}
-              {/* <AddSongForm selectedPlaylistId={null} /> */}
-              {/* <Separator className="my-8" /> */}
+              {/* Add Song Form (via URL) */}
+              <AddSongForm />
+              <Separator className="my-8" />
 
               {/* Playlist View Section */}
               {selectedPlaylistForView ? (
@@ -147,9 +177,20 @@ export default function Home() {
              <Search className="h-5 w-5" />
              Search
            </Button>
+           {/* Button to open queue sheet */}
+           <Button
+             variant="ghost"
+             size="sm"
+             onClick={() => setIsQueueSidebarOpen(true)}
+             className="flex flex-col h-auto items-center gap-1 text-muted-foreground text-xs"
+           >
+             <ListOrdered className="h-5 w-5" />
+             Queue
+           </Button>
            {/* Add other mobile navigation items here if needed */}
          </nav>
        )}
     </div>
   );
 }
+

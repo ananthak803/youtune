@@ -41,7 +41,8 @@ const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 async function fetchYoutubeAPI(endpoint: string, params: Record<string, string>): Promise<any> {
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (!apiKey) {
-        console.error('YouTube API key (YOUTUBE_API_KEY) is missing in environment variables.');
+        console.error('[YouTube Service] YouTube API key (YOUTUBE_API_KEY) is missing in environment variables.');
+        // This specific error message is checked in the calling components (e.g., AddSongForm, searchYoutubeAction)
         throw new Error('Server configuration error: YouTube API key is missing.');
     }
 
@@ -62,6 +63,7 @@ async function fetchYoutubeAPI(endpoint: string, params: Record<string, string>)
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Unknown API error' }));
             console.error(`[YouTube Service] API Error (${response.status}):`, errorData);
+             // This specific error message is checked in the calling components
             throw new Error(`YouTube API Error: ${errorData?.error?.message || response.statusText}`);
         }
 
@@ -71,10 +73,11 @@ async function fetchYoutubeAPI(endpoint: string, params: Record<string, string>)
 
     } catch (error) {
         console.error(`[YouTube Service] Fetch failed for ${endpoint}:`, error);
-        if (error instanceof Error && error.message.startsWith('YouTube API Error:')) {
-            throw error; // Re-throw specific API errors
+        if (error instanceof Error && (error.message.startsWith('YouTube API Error:') || error.message.startsWith('Server configuration error:'))) {
+            throw error; // Re-throw specific API errors or config errors
         }
-        throw new Error('Failed to fetch data from YouTube.');
+        // Rethrow network or other unexpected errors
+        throw new Error(`Network or unexpected error occurred while fetching from YouTube: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
 
@@ -83,43 +86,48 @@ async function fetchYoutubeAPI(endpoint: string, params: Record<string, string>)
 
 /**
  * Asynchronously retrieves actual metadata for a given YouTube video ID using the YouTube Data API.
+ * This function REQUIRES the YouTube API Key to be configured.
  *
  * @param videoId The ID of the YouTube video.
  * @returns A promise that resolves to a YoutubeVideoMetadata object containing actual metadata.
  * @throws An error if the API call fails or the video is not found.
  */
-// export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeVideoMetadata> {
-//   console.log(`[YouTube Service] Fetching metadata for video ID: ${videoId}`);
-//   const params = {
-//     part: 'snippet',
-//     id: videoId,
-//   };
+export async function getYoutubeVideoMetadata(videoId: string): Promise<YoutubeVideoMetadata> {
+  console.log(`[YouTube Service] Fetching metadata via API for video ID: ${videoId}`);
+  const params = {
+    part: 'snippet',
+    id: videoId,
+  };
 
-//   const data = await fetchYoutubeAPI('videos', params);
+  // This call requires the API key, handled within fetchYoutubeAPI
+  const data = await fetchYoutubeAPI('videos', params);
 
-//   if (!data.items || data.items.length === 0) {
-//     throw new Error(`Video with ID ${videoId} not found.`);
-//   }
+  if (!data.items || data.items.length === 0) {
+    throw new Error(`Video with ID ${videoId} not found via API.`);
+  }
 
-//   const snippet = data.items[0].snippet;
-//   const thumbnailUrl = snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '/placeholder-album.svg'; // Fallback
+  const snippet = data.items[0].snippet;
+  const thumbnailUrl = snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '/placeholder-album.svg'; // Fallback
 
-//   return {
-//     title: snippet.title || 'Unknown Title',
-//     author: snippet.channelTitle || 'Unknown Artist',
-//     thumbnailUrl: thumbnailUrl,
-//   };
-// }
+  const metadata = {
+    title: snippet.title || 'Unknown Title',
+    author: snippet.channelTitle || 'Unknown Artist',
+    thumbnailUrl: thumbnailUrl,
+  };
+  console.log(`[YouTube Service] Successfully fetched metadata for ${videoId}:`, metadata);
+  return metadata;
+}
 
 
 /**
  * Asynchronously searches YouTube for videos based on a query using the YouTube Data API.
+ * This function REQUIRES the YouTube API Key to be configured.
  *
  * @param query The search term.
  * @param maxResults The maximum number of results to return (default 5).
  * @returns A promise that resolves to an array of YoutubeSearchResult objects.
  */
-export async function searchYoutubeVideos(query: string, maxResults = 5): Promise<YoutubeSearchResult[]> {
+export async function searchYoutubeVideos(query: string, maxResults = 10): Promise<YoutubeSearchResult[]> {
     console.log(`[YouTube Service] Searching for query: "${query}", maxResults: ${maxResults}`);
     const params = {
         part: 'snippet',
@@ -128,6 +136,7 @@ export async function searchYoutubeVideos(query: string, maxResults = 5): Promis
         maxResults: maxResults.toString(),
     };
 
+    // This call requires the API key, handled within fetchYoutubeAPI
     const data = await fetchYoutubeAPI('search', params);
 
     if (!data.items) {
@@ -158,3 +167,41 @@ export async function searchYoutubeVideos(query: string, maxResults = 5): Promis
     return results;
 }
 
+/**
+ * Extracts the YouTube video ID from various URL formats.
+ * @param url The YouTube URL string.
+ * @returns The video ID string or null if no valid ID is found.
+ */
+export function extractYoutubeVideoId(url: string): string | null {
+    if (!url) return null;
+    try {
+        const urlObj = new URL(url);
+        // Standard watch?v= format
+        if (urlObj.hostname === 'www.youtube.com' || urlObj.hostname === 'youtube.com') {
+            const videoId = urlObj.searchParams.get('v');
+            if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+                return videoId;
+            }
+        }
+        // Shortened youtu.be format
+        if (urlObj.hostname === 'youtu.be') {
+            const videoId = urlObj.pathname.substring(1); // Remove leading '/'
+            if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+                return videoId;
+            }
+        }
+        // Embed format
+        if (urlObj.pathname.startsWith('/embed/')) {
+             const videoId = urlObj.pathname.split('/')[2];
+             if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+                 return videoId;
+             }
+        }
+    } catch (e) {
+        // Invalid URL format
+        console.error(`[YouTube Service] Invalid URL provided to extractYoutubeVideoId: ${url}`, e);
+        return null;
+    }
+    console.warn(`[YouTube Service] Could not extract valid video ID from URL: ${url}`);
+    return null;
+}
