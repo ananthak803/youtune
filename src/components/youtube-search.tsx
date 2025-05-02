@@ -182,7 +182,7 @@ export function YoutubeSearch() {
                             sizes="(max-width: 768px) 80px, 80px" // Provide sizes hint
                             className="object-cover" // Ensure image covers the area
                             data-ai-hint="youtube video thumbnail"
-                            unoptimized // Keep unoptimized for external URLs unless configured
+                            // unoptimized // Keep unoptimized for external URLs unless configured (Removed as i.ytimg.com is configured)
                             onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
                         />
                    </div>
@@ -193,10 +193,11 @@ export function YoutubeSearch() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground" // Button is always rendered here
                     onClick={() => handleInitiateAddSong(result)}
-                    aria-label={`Add ${result.title} to playlist`}
-                    disabled={isSelectPlaylistDialogOpen || songToAdd?.id === result.videoId}
+                    aria-label={`Add "${result.title}" to playlist`}
+                    // Disable if the selection dialog is open OR if this specific song is the one currently being processed for adding
+                    disabled={isSelectPlaylistDialogOpen || (songToAdd !== null && songToAdd.id === result.videoId)}
                   >
                     <ListPlus className="h-5 w-5" />
                   </Button>
