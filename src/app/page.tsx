@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
@@ -10,42 +11,44 @@ import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function Home() {
+  // Get state from the store
   const playlists = usePlaylistStore((state) => state.playlists);
-  const activePlaylistId = usePlaylistStore((state) => state.activePlaylistId);
-  const setActivePlaylistId = usePlaylistStore(
-    (state) => state.setActivePlaylistId
-  );
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(
-    playlists.find((p) => p.id === activePlaylistId) ?? playlists[0] ?? null
-  );
+  const activePlaylistId = usePlaylistStore((state) => state.activePlaylistId); // ID of the playlist being *viewed*
+  const setActivePlaylistId = usePlaylistStore((state) => state.setActivePlaylistId); // Action to change *viewed* playlist
 
-  const handleSelectPlaylist = (playlist: Playlist) => {
-    setSelectedPlaylist(playlist);
-    setActivePlaylistId(playlist.id);
+  // Local state to hold the currently selected playlist object for viewing
+  const [selectedPlaylistForView, setSelectedPlaylistForView] = useState<Playlist | null>(null);
+
+  // Effect to update the local state when the activePlaylistId changes in the store
+  useEffect(() => {
+    const newlySelectedPlaylist = playlists.find((p) => p.id === activePlaylistId) ?? null;
+    setSelectedPlaylistForView(newlySelectedPlaylist);
+  }, [activePlaylistId, playlists]);
+
+  // Handler for selecting a playlist in the sidebar - now just updates the *viewed* playlist ID
+  const handleSelectPlaylistForView = (playlist: Playlist) => {
+    setActivePlaylistId(playlist.id); // This updates the store's activePlaylistId
   };
 
-  const handleCreatePlaylist = (name: string) => {
-    // Logic to create a new playlist will be handled by the store
-    // Selecting the new playlist can be done here if needed after creation
-  };
+  // Create playlist action is handled directly by the store via Sidebar component
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           playlists={playlists}
-          selectedPlaylistId={selectedPlaylist?.id ?? null}
-          onSelectPlaylist={handleSelectPlaylist}
-          onCreatePlaylist={handleCreatePlaylist}
+          selectedPlaylistId={activePlaylistId} // Pass the active *viewed* ID for highlighting
+          onSelectPlaylist={handleSelectPlaylistForView}
+          // onCreatePlaylist is handled by store via Sidebar component
         />
         <main className="flex flex-1 flex-col overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="container mx-auto px-4 py-8 md:px-8">
-              <AddSongForm
-                selectedPlaylistId={selectedPlaylist?.id ?? null}
-              />
-              {selectedPlaylist ? (
-                <PlaylistView playlist={selectedPlaylist} />
+              {/* AddSongForm doesn't need the viewed playlist ID for adding songs anymore */}
+              <AddSongForm selectedPlaylistId={null} />
+              {selectedPlaylistForView ? (
+                // Pass the locally tracked selected playlist object to PlaylistView
+                <PlaylistView playlist={selectedPlaylistForView} />
               ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
                   <p>Select or create a playlist to get started.</p>
@@ -55,6 +58,7 @@ export default function Home() {
           </ScrollArea>
         </main>
       </div>
+      {/* Player is independent and uses its own state from the store */}
       <Player />
     </div>
   );

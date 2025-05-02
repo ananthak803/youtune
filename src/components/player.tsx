@@ -13,12 +13,12 @@ import {
   Volume2,
   VolumeX,
   Volume1,
-  Repeat1, // Icon for single song loop
+  Repeat1,
 } from 'lucide-react';
 import Image from 'next/image';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { usePlaylistStore, setPlayerRef } from '@/store/playlist-store'; // Import setPlayerRef
+import { usePlaylistStore, setPlayerRef } from '@/store/playlist-store';
 import { cn } from '@/lib/utils';
 import type { Song } from '@/lib/types';
 
@@ -41,14 +41,14 @@ export function Player() {
     currentSong,
     isPlaying,
     isShuffling,
-    isLooping, // Single song loop
-    isLoopingPlaylist, // Playlist loop (new state needed in store)
+    isLooping,
+    isLoopingPlaylist,
     playNextSong,
     playPreviousSong,
     togglePlayPause,
     toggleShuffle,
-    toggleLoop, // Toggles single song loop
-    toggleLoopPlaylist, // Toggles playlist loop (new action needed in store)
+    toggleLoop,
+    toggleLoopPlaylist,
     setCurrentSongProgress,
     currentSongProgress,
     currentSongDuration,
@@ -58,18 +58,19 @@ export function Player() {
     isMuted,
     toggleMute,
     isInSinglePlayMode,
+    currentSongPlaylistContextId, // Get context ID
   } = usePlaylistStore((state) => ({
     currentSong: state.currentSong,
     isPlaying: state.isPlaying,
     isShuffling: state.isShuffling,
     isLooping: state.isLooping,
-    isLoopingPlaylist: state.isLoopingPlaylist, // Get playlist loop state
+    isLoopingPlaylist: state.isLoopingPlaylist,
     playNextSong: state.playNextSong,
     playPreviousSong: state.playPreviousSong,
     togglePlayPause: state.togglePlayPause,
     toggleShuffle: state.toggleShuffle,
     toggleLoop: state.toggleLoop,
-    toggleLoopPlaylist: state.toggleLoopPlaylist, // Get playlist loop toggle action
+    toggleLoopPlaylist: state.toggleLoopPlaylist,
     setCurrentSongProgress: state.setCurrentSongProgress,
     currentSongProgress: state.currentSongProgress,
     currentSongDuration: state.currentSongDuration,
@@ -79,32 +80,29 @@ export function Player() {
     isMuted: state.isMuted,
     toggleMute: state.toggleMute,
     isInSinglePlayMode: state.isInSinglePlayMode,
+    currentSongPlaylistContextId: state.currentSongPlaylistContextId, // Get playing context
   }));
 
   const playerRef = useRef<ReactPlayer>(null);
   const [seeking, setSeeking] = useState(false);
   const [localVolume, setLocalVolume] = useState(volume);
   const [hasMounted, setHasMounted] = useState(false);
-  const currentSongIdRef = useRef<string | null>(null); // Ref to track current song ID for progress updates
+  const currentSongIdRef = useRef<string | null>(null);
 
   // --- Effects ---
   useEffect(() => {
     setHasMounted(true);
-    // Pass the playerRef to the store
     setPlayerRef(playerRef);
   }, []);
 
   useEffect(() => {
-    // Sync local volume with store, but allow local updates while dragging
     if (!seeking) {
        setLocalVolume(volume);
     }
   }, [volume, seeking]);
 
   useEffect(() => {
-     // Update the ref whenever the current song changes
      currentSongIdRef.current = currentSong?.id ?? null;
-      // Reset progress and duration visually if song becomes null
      if (!currentSong) {
          setCurrentSongProgress(0);
          setCurrentSongDuration(0);
@@ -113,30 +111,23 @@ export function Player() {
 
  // --- Handlers ---
 
- // Debounce progress handler slightly to avoid race condition on song change
  const debouncedSetCurrentSongProgress = useCallback(
     debounce((progress: number, songId: string | null) => {
-        // Only update progress if the song ID hasn't changed since the update was scheduled
         if (songId === currentSongIdRef.current && songId !== null) {
            setCurrentSongProgress(progress);
         }
-    }, 50), // 50ms debounce, adjust as needed
+    }, 50),
     [setCurrentSongProgress]
  );
 
 
  const handleProgress = useCallback(
     (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number; }) => {
-        // Check if the component is still mounted and player exists
         if (!seeking && playerRef.current && hasMounted && currentSongIdRef.current) {
             const duration = currentSongDuration || 0;
-             // Check if the progress corresponds to the currently loaded song ID
-             // And check if progress is within valid bounds (considering potential small inaccuracies)
              if (duration > 0 && state.playedSeconds >= 0 && state.playedSeconds <= duration + 0.5) {
-                // Use the debounced function to update the progress
                 debouncedSetCurrentSongProgress(state.playedSeconds, currentSongIdRef.current);
              } else if (duration === 0 && state.playedSeconds === 0) {
-                // Allow setting progress to 0 when duration is not yet known or song just started
                 debouncedSetCurrentSongProgress(0, currentSongIdRef.current);
              }
         }
@@ -147,10 +138,7 @@ export function Player() {
 
   const handleDuration = useCallback(
     (duration: number) => {
-       if (hasMounted && currentSongIdRef.current) { // Ensure component is mounted and there's a song
-           // Only update duration if it's for the correct song
-           // This check is implicitly handled by currentSongIdRef usage in handleProgress
-           // and the useEffect that resets duration when song becomes null.
+       if (hasMounted && currentSongIdRef.current) {
            setCurrentSongDuration(duration);
        }
     },
@@ -158,8 +146,7 @@ export function Player() {
   );
 
     const handleEnded = useCallback(() => {
-        if (hasMounted) { // Ensure component is mounted
-            // Don't reset progress here, let playNextSong handle it if a new song plays
+        if (hasMounted) {
              playNextSong();
         }
     }, [playNextSong, hasMounted]);
@@ -172,7 +159,6 @@ export function Player() {
 
   const handleSeekChange = (value: number[]) => {
      if (!currentSong || !hasMounted) return;
-     // Update the visual progress immediately while seeking
      setCurrentSongProgress(value[0]);
   };
 
@@ -180,36 +166,34 @@ export function Player() {
     if (playerRef.current && hasMounted && currentSong) {
       const seekTime = value[0];
       playerRef.current.seekTo(seekTime);
-      setCurrentSongProgress(seekTime); // Ensure final update
+      setCurrentSongProgress(seekTime);
     }
-    // Delay setting seeking to false slightly to allow final progress update
     setTimeout(() => setSeeking(false), 50);
   };
 
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
-    setLocalVolume(newVolume); // Update local state immediately for smooth slider feedback
-    setVolume(newVolume);     // Update zustand store (might be slightly delayed)
+    setLocalVolume(newVolume);
+    setVolume(newVolume);
   };
 
    // --- Loop Logic ---
    const handleLoopToggle = () => {
-       // Cycle through: No Loop -> Loop Playlist -> Loop Song -> No Loop
        if (!isLooping && !isLoopingPlaylist) {
-           toggleLoopPlaylist(); // Turn on playlist loop
+           toggleLoopPlaylist();
        } else if (isLoopingPlaylist) {
-           toggleLoopPlaylist(); // Turn off playlist loop
-           toggleLoop();        // Turn on song loop
-       } else { // isLooping is true
-           toggleLoop();        // Turn off song loop
+           toggleLoopPlaylist();
+           toggleLoop();
+       } else {
+           toggleLoop();
        }
    };
 
    const getLoopIcon = () => {
-       if (isLooping) return <Repeat1 className="h-4 w-4" />; // Single song loop
-       if (isLoopingPlaylist) return <Repeat className="h-4 w-4 text-accent" />; // Playlist loop (colored)
-       return <Repeat className="h-4 w-4" />; // No loop
+       if (isLooping) return <Repeat1 className="h-4 w-4 text-accent" />; // Highlight single loop when active
+       if (isLoopingPlaylist) return <Repeat className="h-4 w-4 text-accent" />;
+       return <Repeat className="h-4 w-4" />;
    };
 
   // --- UI Helpers ---
@@ -227,8 +211,11 @@ export function Player() {
     return <Volume2 className="h-5 w-5" />;
   };
 
-  // Determine if playlist controls should be disabled
-  const disablePlaylistControls = isInSinglePlayMode || !currentSong;
+  // Determine if playlist controls (Shuffle, Playlist Loop) should be disabled
+  // Disable if no song, or in single play mode, or no playlist context
+  const disablePlaylistControls = !currentSong || isInSinglePlayMode || !currentSongPlaylistContextId;
+  // Loop Song button is disabled only if there's no song
+  const disableLoopSongControl = !currentSong;
 
   const displayProgress = currentSong ? currentSongProgress : 0;
   const displayDuration = currentSong ? currentSongDuration : 0;
@@ -236,35 +223,28 @@ export function Player() {
 
   return (
     <footer className="border-t border-border bg-card p-4">
-      {/* ReactPlayer needs to be mounted conditionally on client */}
       {hasMounted && currentSong?.url && (
-        <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}> {/* Hide player visually but keep it in DOM */}
+        <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
             <ReactPlayer
                 ref={playerRef}
                 url={currentSong.url}
                 playing={isPlaying}
                 volume={isMuted ? 0 : localVolume}
-                loop={isLooping} // Use ReactPlayer's loop prop for single song loop
+                loop={isLooping} // Single song loop is handled directly by ReactPlayer
                 onProgress={handleProgress}
                 onDuration={handleDuration}
-                onEnded={handleEnded} // Use custom handler to decide next action
-                width="1px" // Minimal size
-                height="1px" // Minimal size
+                onEnded={handleEnded}
+                width="1px"
+                height="1px"
                 config={{
-                    youtube: {
-                        playerVars: {
-                             // controls: 0, // Hides YouTube's native controls
-                            // modestbranding: 1, // Optional: reduces YouTube logo visibility
-                        },
-                    },
+                    youtube: { playerVars: { playsinline: 1 } }, // playsinline might help on mobile
                 }}
-                // style={{ display: 'none' }} // Alternative hiding method
             />
         </div>
       )}
       <div className="flex items-center justify-between">
         {/* Song Info */}
-        <div className="flex items-center gap-3 w-1/3 min-w-0"> {/* Added min-w-0 for better truncation */}
+        <div className="flex items-center gap-3 w-1/3 min-w-0">
           {currentSong ? (
             <>
               <Image
@@ -272,11 +252,11 @@ export function Player() {
                 alt={currentSong.title || 'Album Art'}
                 width={56}
                 height={56}
-                className="rounded flex-shrink-0" // Prevent image shrinking
+                className="rounded flex-shrink-0"
                 data-ai-hint="music album cover"
                 onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
               />
-              <div className="overflow-hidden"> {/* Added wrapper for truncation */}
+              <div className="overflow-hidden">
                 <p className="font-semibold truncate text-sm">{currentSong.title || 'Unknown Title'}</p>
                 <p className="text-xs text-muted-foreground truncate">{currentSong.author || 'Unknown Artist'}</p>
               </div>
@@ -297,42 +277,46 @@ export function Player() {
         {/* Player Controls */}
         <div className="flex flex-col items-center gap-2 w-1/3">
           <div className="flex items-center gap-4">
+            {/* Shuffle Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleShuffle}
               className={cn('h-8 w-8', isShuffling && !disablePlaylistControls && 'text-accent')}
-              disabled={disablePlaylistControls}
+              disabled={disablePlaylistControls} // Use the specific disable flag
               aria-label={isShuffling ? 'Disable shuffle' : 'Enable shuffle'}
             >
               <Shuffle className="h-4 w-4" />
             </Button>
+            {/* Previous Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={playPreviousSong}
               className="h-8 w-8"
-              disabled={!currentSong} // Can always restart or go back if there's a song
+              disabled={!currentSong} // Disabled only if no song is loaded
               aria-label="Previous song / Restart"
             >
               <SkipBack className="h-4 w-4" />
             </Button>
+            {/* Play/Pause Button */}
             <Button
               variant="default"
               size="icon"
               onClick={togglePlayPause}
-              className="h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90" // Updated style to use primary
-              disabled={!currentSong}
+              className="h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={!currentSong} // Disabled only if no song is loaded
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
             </Button>
+            {/* Next Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={playNextSong}
               className="h-8 w-8"
-              disabled={!currentSong} // Can always skip if there's a song (might stop if at end)
+              disabled={!currentSong} // Disabled only if no song is loaded
               aria-label="Next song"
             >
               <SkipForward className="h-4 w-4" />
@@ -342,8 +326,11 @@ export function Player() {
                 variant="ghost"
                 size="icon"
                 onClick={handleLoopToggle}
-                className={cn('h-8 w-8', (isLooping || isLoopingPlaylist) && !disablePlaylistControls && 'text-accent')} // Active if either loop is on (in playlist mode) or song loop is on (single mode)
-                disabled={!currentSong} // Disable if no song
+                className={cn('h-8 w-8',
+                    // Highlight if single song loop OR playlist loop (when not in single mode) is active
+                    (isLooping || (isLoopingPlaylist && !disablePlaylistControls)) && 'text-accent'
+                 )}
+                disabled={disableLoopSongControl} // Disable only if no song is loaded at all
                 aria-label={isLooping ? 'Disable loop' : isLoopingPlaylist ? 'Enable song loop' : 'Enable playlist loop'}
              >
                 {getLoopIcon()}
@@ -354,30 +341,25 @@ export function Player() {
               {formatTime(displayProgress)}
             </span>
             <Slider
-              // Use displayProgress which resets to 0 when currentSong is null
               value={[displayProgress]}
-              // Use displayDuration which resets to 0, ensuring max is at least 1 for slider rendering
               max={Math.max(displayDuration, 1)}
-              step={0.1} // Finer step for smoother seeking
-              className="flex-1 [&>span:first-child]:h-1 [&>span:first-child>span]:h-1 [&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button:hover]:scale-110"
-              onValueChange={handleSeekChange} // Update visually on change
+              step={0.1}
+              className="flex-1 [&>span:first-child]:h-1 [&>span:first-child>span]:h-1 [&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button:hover]:scale-110 [&>button]:transition-transform"
+              onValueChange={handleSeekChange}
               onPointerDown={handleSeekMouseDown}
               onPointerUp={(e) => {
-                    // Read value from the slider itself on pointer up for accuracy
                     const sliderElement = e.currentTarget as HTMLElement;
                     const track = sliderElement.querySelector('[data-radix-slider-track]');
                     const thumb = sliderElement.querySelector('[role="slider"]');
                     if (thumb && track) {
                         const trackRect = track.getBoundingClientRect();
                         const thumbRect = thumb.getBoundingClientRect();
-                        // Calculate percentage based on thumb center relative to track start
                         const thumbCenter = thumbRect.left + thumbRect.width / 2;
-                        const percentage = (thumbCenter - trackRect.left) / trackRect.width;
+                        const percentage = Math.max(0, Math.min(1, (thumbCenter - trackRect.left) / trackRect.width)); // Clamp percentage
                         const maxValue = Math.max(displayDuration, 1);
                         const seekValue = Math.max(0, Math.min(maxValue, percentage * maxValue));
                          handleSeekMouseUp([seekValue]);
                     } else {
-                         // Fallback: use the last known value from onValueChange if needed
                          handleSeekMouseUp([displayProgress]);
                          console.warn("Could not accurately determine seek value on pointer up.");
                     }
@@ -403,7 +385,7 @@ export function Player() {
             {getVolumeIcon()}
           </Button>
           <Slider
-            value={[isMuted ? 0 : localVolume]} // Reflect mute state visually
+            value={[isMuted ? 0 : localVolume]}
             max={1}
             step={0.01}
             className="w-24 [&>span:first-child]:h-1 [&>span:first-child>span]:h-1 [&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0"

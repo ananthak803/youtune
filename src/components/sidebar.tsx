@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -11,16 +12,15 @@ import { usePlaylistStore } from '@/store/playlist-store';
 
 interface SidebarProps {
   playlists: Playlist[];
-  selectedPlaylistId: string | null;
-  onSelectPlaylist: (playlist: Playlist) => void;
-  onCreatePlaylist: (name: string) => void; // This might be handled directly by store now
+  selectedPlaylistId: string | null; // ID of the playlist currently being *viewed*
+  onSelectPlaylist: (playlist: Playlist) => void; // Callback when a playlist is selected for *viewing*
+  // onCreatePlaylist is handled directly by the store
 }
 
 export function Sidebar({
   playlists,
-  selectedPlaylistId,
+  selectedPlaylistId, // This is the ID of the playlist being viewed
   onSelectPlaylist,
-  // onCreatePlaylist is handled by store
 }: SidebarProps) {
   const createPlaylist = usePlaylistStore((state) => state.createPlaylist);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
@@ -28,7 +28,7 @@ export function Sidebar({
   const handleCreatePlaylist = (name: string) => {
     if (name.trim()) {
       createPlaylist(name.trim());
-      setIsCreateDialogOpen(false); // Close dialog on successful creation
+      setIsCreateDialogOpen(false);
     }
   };
 
@@ -52,12 +52,13 @@ export function Sidebar({
           {playlists.map((playlist) => (
             <Button
               key={playlist.id}
+              // Highlight based on the selectedPlaylistId prop (the viewed playlist)
               variant={selectedPlaylistId === playlist.id ? 'secondary' : 'ghost'}
               className={cn(
                 'w-full justify-start truncate',
-                selectedPlaylistId === playlist.id && 'font-semibold text-accent-foreground'
+                selectedPlaylistId === playlist.id && 'font-semibold' // Keep font-semibold, rely on variant for color
               )}
-              onClick={() => onSelectPlaylist(playlist)}
+              onClick={() => onSelectPlaylist(playlist)} // Trigger the view change callback
             >
               <ListMusic className="mr-2 h-4 w-4 flex-shrink-0" />
               <span className="truncate">{playlist.name}</span>
