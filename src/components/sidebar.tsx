@@ -35,13 +35,27 @@ export function Sidebar({
   return (
     <aside className="w-60 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-screen"> {/* Use sidebar theme, adjust width/padding */}
       {/* App Title */}
-      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-2">
+      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1"> {/* Reduced mb */}
           <h1 className="text-xl font-bold text-primary">YouTune</h1> {/* Use Primary text color */}
       </div>
 
+      {/* Create Playlist Button at Top */}
+      <div className="px-1 mb-3"> {/* Added padding and margin */}
+         <Button
+            variant="outline"
+            className="w-full justify-start h-9 rounded-md text-sm border-sidebar-border text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-accent" // Match playlist item style, adjust border
+            onClick={() => setIsCreateDialogOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Playlist
+          </Button>
+      </div>
+
+      {/* Separator */}
+       <Separator className="mb-3 bg-sidebar-border" /> {/* Added margin-bottom */}
 
       {/* Playlist List */}
-      <ScrollArea className="flex-1 mb-3"> {/* Add margin-bottom */}
+      <ScrollArea className="flex-1"> {/* Remove mb-3 here */}
         <nav className="flex flex-col gap-1 px-1"> {/* Adjust padding */}
           {playlists.map((playlist) => (
             <Button
@@ -67,20 +81,9 @@ export function Sidebar({
         </nav>
       </ScrollArea>
 
-      {/* Separator */}
-       <Separator className="my-2 bg-sidebar-border" />
-
-      {/* Create Playlist Button at Bottom */}
-      <div className="mt-auto pb-1 px-1"> {/* mt-auto pushes to bottom, add padding */}
-         <Button
-            variant="outline" // Changed to outline for better visibility
-            className="w-full justify-start h-9 rounded-md text-sm border-sidebar-border text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-accent" // Match playlist item style, adjust border
-            onClick={() => setIsCreateDialogOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create New Playlist
-          </Button>
-      </div>
+      {/* Removed bottom create button section */}
+      {/* <Separator className="my-2 bg-sidebar-border" /> */}
+      {/* <div className="mt-auto pb-1 px-1"> ... </div> */}
 
 
        <CreatePlaylistDialog
