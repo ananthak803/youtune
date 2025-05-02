@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, ListMusic } from 'lucide-react'; // Removed Music2
+import { Plus, ListMusic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ export function Sidebar({
   const handleCreatePlaylist = (name: string) => {
     if (name.trim()) {
       createPlaylist(name.trim());
-      setIsCreateDialogOpen(false);
+      setIsCreateDialogOpen(false); // Close dialog after creation
     }
   };
 
@@ -36,7 +36,6 @@ export function Sidebar({
     <aside className="w-60 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-screen"> {/* Use sidebar theme, adjust width/padding */}
       {/* App Title */}
       <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-2">
-          {/* Removed the icon previously here */}
           <h1 className="text-xl font-bold text-primary">YouTune</h1> {/* Use Primary text color */}
       </div>
 
