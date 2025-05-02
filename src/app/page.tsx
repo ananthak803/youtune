@@ -6,11 +6,14 @@ import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
 import { AddSongForm } from '@/components/add-song-form';
-import { YoutubeSearch } from '@/components/youtube-search'; // Import the new component
+import { YoutubeSearch } from '@/components/youtube-search'; // Import the search component
 import type { Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator'; // Import Separator
+import { Button } from '@/components/ui/button'; // Import Button
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet'; // Import Sheet components
+import { Youtube } from 'lucide-react'; // Import Youtube icon
 
 export default function Home() {
   // Get state from the store
@@ -20,6 +23,7 @@ export default function Home() {
 
   // Local state to hold the currently selected playlist object for viewing
   const [selectedPlaylistForView, setSelectedPlaylistForView] = useState<Playlist | null>(null);
+  const [isSearchSidebarOpen, setIsSearchSidebarOpen] = useState(false); // State for search sidebar
 
   // Effect to update the local state when the activePlaylistId changes in the store
   useEffect(() => {
@@ -43,14 +47,42 @@ export default function Home() {
           onSelectPlaylist={handleSelectPlaylistForView}
           // onCreatePlaylist is handled by store via Sidebar component
         />
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex flex-1 flex-col overflow-hidden relative"> {/* Added relative positioning */}
+           {/* Search Sidebar Trigger Button */}
+           <Sheet open={isSearchSidebarOpen} onOpenChange={setIsSearchSidebarOpen}>
+             <SheetTrigger asChild>
+               <Button
+                 variant="ghost"
+                 size="icon"
+                 className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground" // Positioned top-right
+                 aria-label="Open YouTube Search"
+               >
+                 <Youtube className="h-5 w-5" />
+               </Button>
+             </SheetTrigger>
+             <SheetContent side="right" className="w-full sm:max-w-md flex flex-col"> {/* Adjusted width and flex */}
+               <SheetHeader>
+                 <SheetTitle>Search YouTube</SheetTitle>
+                 <SheetDescription>
+                   Find videos and add them to your playlists.
+                 </SheetDescription>
+               </SheetHeader>
+               {/* Wrap YoutubeSearch in a ScrollArea if content might overflow */}
+               <ScrollArea className="flex-1">
+                  <div className="p-4"> {/* Add padding if needed */}
+                    <YoutubeSearch />
+                  </div>
+               </ScrollArea>
+             </SheetContent>
+           </Sheet>
+
           <ScrollArea className="flex-1">
             <div className="container mx-auto px-4 py-8 md:px-8">
               {/* AddSongForm doesn't need the viewed playlist ID for adding songs anymore */}
               <AddSongForm selectedPlaylistId={null} />
 
-              {/* YouTube Search Section */}
-              <YoutubeSearch />
+              {/* YouTube Search Section is now removed from here */}
+              {/* <YoutubeSearch /> */}
 
               <Separator className="my-8" /> {/* Add a separator */}
 
@@ -59,7 +91,7 @@ export default function Home() {
                 // Pass the locally tracked selected playlist object to PlaylistView
                 <PlaylistView playlist={selectedPlaylistForView} />
               ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground">
+                <div className="flex h-[50vh] items-center justify-center text-muted-foreground"> {/* Added height */}
                   <p>Select or create a playlist to get started.</p>
                 </div>
               )}
@@ -72,3 +104,4 @@ export default function Home() {
     </div>
   );
 }
+

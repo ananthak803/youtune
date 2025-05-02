@@ -16,7 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card'; // Keep Card for individual results
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { searchYoutubeAction } from '@/actions/youtube-actions';
@@ -129,22 +129,19 @@ export function YoutubeSearch() {
 
   return (
     <>
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Search YouTube</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Removed the outer Card */}
+      <div className="space-y-6"> {/* Added spacing */}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-2 md:flex-nowrap md:gap-4">
               <FormField
                 control={form.control}
                 name="query"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-[200px]">
+                  <FormItem className="flex-1 min-w-[150px]"> {/* Adjusted min-width */}
                     <FormLabel>Search Term</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Enter song title, artist, etc."
+                        placeholder="Enter song title, artist..."
                         {...field}
                         disabled={isLoading}
                         aria-label="YouTube Search Input"
@@ -160,27 +157,25 @@ export function YoutubeSearch() {
               </Button>
             </form>
           </Form>
-        </CardContent>
-      </Card>
 
-      {isLoading && (
-         <div className="flex justify-center items-center p-8">
-            <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
-         </div>
-      )}
+        {isLoading && (
+          <div className="flex justify-center items-center p-8">
+              <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+          </div>
+        )}
 
-      {!isLoading && searchResults.length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold mb-4">Search Results</h3>
-          <ScrollArea className="h-[40vh] pr-4"> {/* Adjust height as needed */}
-            <div className="grid grid-cols-1 gap-4">
+        {!isLoading && searchResults.length > 0 && (
+          <div className="mt-6"> {/* Added top margin */}
+            <h3 className="text-lg font-semibold mb-3">Results</h3> {/* Adjusted heading size/margin */}
+             {/* ScrollArea is now handled by the parent Sheet */}
+            <div className="space-y-3"> {/* Use space-y for gap */}
               {searchResults.map((result) => (
                 <Card key={result.videoId} className="flex items-center p-3 gap-3">
                    <Image
                         src={result.thumbnailUrl || '/placeholder-album.svg'}
                         alt={result.title}
-                        width={60} // Slightly larger for visibility
-                        height={45} // Maintain 4:3 aspect ratio for default thumbs
+                        width={60}
+                        height={45}
                         className="rounded flex-shrink-0 object-cover"
                         data-ai-hint="youtube video thumbnail"
                         onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
@@ -195,30 +190,33 @@ export function YoutubeSearch() {
                     className="h-8 w-8 flex-shrink-0"
                     onClick={() => handleInitiateAddSong(result)}
                     aria-label={`Add ${result.title} to playlist`}
-                    disabled={isSelectPlaylistDialogOpen || songToAdd?.id === result.videoId} // Prevent spam clicking the same add button
+                    disabled={isSelectPlaylistDialogOpen || songToAdd?.id === result.videoId}
                   >
                     <ListPlus className="h-5 w-5" />
                   </Button>
                 </Card>
               ))}
             </div>
-          </ScrollArea>
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Playlist Selection Dialog */}
+         {!isLoading && searchResults.length === 0 && form.formState.isSubmitted && (
+             <p className="text-muted-foreground text-sm text-center mt-6">No results found.</p>
+         )}
+      </div>
+
+      {/* Playlist Selection Dialog remains unchanged */}
       <SelectPlaylistDialog
         isOpen={isSelectPlaylistDialogOpen}
         onOpenChange={(open) => {
           setIsSelectPlaylistDialogOpen(open);
-          // If dialog is closed without selection, reset temp song
           if (!open) {
             setSongToAdd(null);
           }
         }}
         playlists={playlists}
         onSelectPlaylist={handlePlaylistSelected}
-        songTitle={songToAdd?.title} // Pass song title for context
+        songTitle={songToAdd?.title}
       />
     </>
   );
