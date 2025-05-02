@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator'; // Import Separator
 import { Button } from '@/components/ui/button'; // Import Button
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet'; // Import Sheet components
-import { Youtube } from 'lucide-react'; // Import Youtube icon
+import { Plus } from 'lucide-react'; // Import Plus icon
 
 export default function Home() {
   // Get state from the store
@@ -52,12 +52,13 @@ export default function Home() {
            <Sheet open={isSearchSidebarOpen} onOpenChange={setIsSearchSidebarOpen}>
              <SheetTrigger asChild>
                <Button
-                 variant="ghost"
-                 size="icon"
-                 className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground" // Positioned top-right
+                 variant="ghost" // Keep ghost variant for subtle look
+                 size="sm" // Use small size to fit text better
+                 className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground flex items-center gap-2 px-3" // Positioned top-right, added padding and gap
                  aria-label="Open YouTube Search"
                >
-                 <Youtube className="h-5 w-5" />
+                 <Plus className="h-4 w-4" /> {/* Changed icon */}
+                 <span>Add from YouTube</span> {/* Added text */}
                </Button>
              </SheetTrigger>
              {/* Adjust SheetContent: remove padding, use flex, and let YoutubeSearch handle scrolling */}
@@ -101,3 +102,4 @@ export default function Home() {
     </div>
   );
 }
+
