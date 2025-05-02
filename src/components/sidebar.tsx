@@ -36,7 +36,11 @@ export function Sidebar({
     <aside className="w-60 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-screen"> {/* Use sidebar theme, adjust width/padding */}
       {/* App Title */}
       <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-2">
-          <Music2 className="h-6 w-6 text-primary" /> {/* Use Primary text color like title */}
+          {/* Use the new SVG icon directly or an appropriate Lucide icon */}
+          {/* Option 1: Lucide icon with accent color */}
+          <Music2 className="h-6 w-6 text-accent" /> {/* Use Accent color */}
+          {/* Option 2: Placeholder for inline SVG if preferred */}
+          {/* <svg width="24" height="24" viewBox="0 0 512 512" fill="hsl(var(--accent))" ...> ... </svg> */}
           <h1 className="text-xl font-bold text-primary">YouTune</h1> {/* Use Primary text color */}
       </div>
 
