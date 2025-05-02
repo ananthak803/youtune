@@ -173,7 +173,7 @@ export function YoutubeSearch() {
             <div className="space-y-3">
               {searchResults.map((result) => (
                 // Increase vertical padding on the Card for more height
-                <Card key={result.videoId} className="flex items-center p-3 py-4 gap-3 overflow-hidden">
+                <Card key={result.videoId} className="flex items-center p-3 py-4 gap-3"> {/* Removed overflow-hidden */}
                    {/* Use a fixed width and aspect ratio for the image container */}
                    <div className="w-[80px] h-[60px] flex-shrink-0 relative rounded overflow-hidden">
                        <Image
@@ -193,7 +193,7 @@ export function YoutubeSearch() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground transition-opacity" // Removed opacity classes
+                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground" // Removed transition-opacity
                     onClick={() => handleInitiateAddSong(result)}
                     aria-label={`Add "${result.title}" to playlist`}
                     // Disable if the selection dialog is open OR if this specific song is the one currently being processed for adding
