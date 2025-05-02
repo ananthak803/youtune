@@ -13,6 +13,9 @@ const fontSans = Inter({
 export const metadata: Metadata = {
   title: 'YouTune',
   description: 'Spotify-like experience using YouTube audio',
+  icons: {
+    icon: '/favicon.svg', // Path relative to the public directory
+  },
 };
 
 export default function RootLayout({
