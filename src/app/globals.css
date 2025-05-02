@@ -8,75 +8,76 @@ body {
 
 @layer base {
   :root {
-    /* Light theme (defaults, adjusted for blue accent) */
+    /* Light theme (defaults, adjusted for purple accent) */
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 240 10% 3.9%; /* Keep dark foreground */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 221 83% 53%; /* Blue Primary */
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 262 83% 58%; /* Purple Primary */
     --primary-foreground: 0 0% 98%; /* Light Primary Foreground */
-    --secondary: 0 0% 96.1%; /* Default Secondary */
-    --secondary-foreground: 0 0% 9%; /* Default Secondary Foreground */
-    --muted: 0 0% 96.1%; /* Default Muted */
-    --muted-foreground: 0 0% 45.1%; /* Default Muted Foreground */
-    --accent: 217 91% 60%; /* Vibrant Blue Accent */
-    --accent-foreground: 0 0% 98%; /* Accent Foreground (Light for Blue) */
+    --secondary: 240 4.8% 95.9%; /* Default Secondary */
+    --secondary-foreground: 240 5.9% 10%; /* Default Secondary Foreground */
+    --muted: 240 4.8% 95.9%; /* Default Muted */
+    --muted-foreground: 240 3.8% 46.1%; /* Default Muted Foreground */
+    --accent: 262 74% 66%; /* Lighter Purple Accent */
+    --accent-foreground: 0 0% 98%; /* Accent Foreground (Light for Purple) */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 217 91% 60%; /* Blue Ring */
-    --chart-1: 217 91% 60%; /* Blue Chart 1 */
-    --chart-2: 217 80% 50%; /* Darker Blue Chart 2 */
-    --chart-3: 217 70% 40%; /* Even Darker Blue Chart 3 */
-    --chart-4: 217 60% 30%;
-    --chart-5: 217 50% 20%;
+    --border: 240 5.9% 90%; /* Default Border */
+    --input: 240 5.9% 90%; /* Default Input */
+    --ring: 262 83% 58%; /* Purple Ring */
+    --chart-1: 262 83% 58%; /* Purple Chart 1 */
+    --chart-2: 262 75% 52%; /* Darker Purple Chart 2 */
+    --chart-3: 262 67% 46%; /* Even Darker Purple Chart 3 */
+    --chart-4: 262 59% 40%;
+    --chart-5: 262 51% 34%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 221 83% 53%; /* Blue Primary in Sidebar */
+    --sidebar-background: 0 0% 98%; /* Light sidebar background */
+    --sidebar-foreground: 240 10% 3.9%; /* Dark sidebar foreground */
+    --sidebar-primary: 262 83% 58%; /* Purple Primary in Sidebar */
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent: 240 4.8% 95.9%; /* Subtle light gray accent */
     --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-border: 240 5.9% 90%; /* Light border */
+    --sidebar-ring: 262 83% 58%; /* Purple ring */
   }
+
   .dark {
-    /* Dark theme for YouTune with Blue Accent */
-    --background: 222 47% 11%; /* Dark Blueish Background */
-    --foreground: 210 40% 80%; /* Lighter Gray Foreground */
-    --card: 222 47% 14%; /* Slightly lighter dark blue for cards */
-    --card-foreground: 210 40% 85%;
-    --popover: 222 47% 9%; /* Darker popover */
-    --popover-foreground: 210 40% 85%;
-    --primary: 210 40% 98%; /* Light primary text on dark bg */
-    --primary-foreground: 222 47% 11%; /* Dark primary text on light primary elements */
-    --secondary: 216 34% 17%; /* Darker secondary elements */
-    --secondary-foreground: 210 40% 85%;
-    --muted: 216 34% 17%; /* Same as secondary for muted */
-    --muted-foreground: 215 20% 65%; /* Dimmer muted text */
-    --accent: 217 91% 60%; /* Vibrant Blue Accent (#2563eb) */
-    --accent-foreground: 210 40% 98%; /* White text on blue */
-    --destructive: 0 63% 31%; /* Darker destructive */
+    /* Dark theme for YouTune with Purple Accent */
+    --background: 240 10% 3.9%; /* Dark Gray Background */
+    --foreground: 0 0% 95%; /* Lighter Gray Foreground */
+    --card: 240 4.8% 10%; /* Slightly lighter dark gray for cards */
+    --card-foreground: 0 0% 95%;
+    --popover: 240 10% 3.9%; /* Dark popover */
+    --popover-foreground: 0 0% 95%;
+    --primary: 262 83% 70%; /* Lighter Purple Primary on dark bg */
+    --primary-foreground: 240 5% 96%; /* Very Light primary text on purple elements */
+    --secondary: 240 3.7% 15.9%; /* Darker secondary elements */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%; /* Same as secondary for muted */
+    --muted-foreground: 240 5% 64.9%; /* Dimmer muted text */
+    --accent: 262 74% 60%; /* Vibrant Purple Accent */
+    --accent-foreground: 0 0% 98%; /* White text on purple */
+    --destructive: 0 62.8% 30.6%; /* Darker destructive */
     --destructive-foreground: 0 0% 98%;
-    --border: 216 34% 17%; /* Darker borders */
-    --input: 216 34% 17%; /* Darker input fields */
-    --ring: 217 91% 60%; /* Blue Ring */
-    --chart-1: 217 91% 60%; /* Use accent for chart */
-    --chart-2: 217 80% 55%;
-    --chart-3: 217 70% 50%;
-    --chart-4: 217 60% 45%;
-    --chart-5: 217 50% 40%;
-    --sidebar-background: 222 47% 9%; /* Very dark blue sidebar */
-    --sidebar-foreground: 210 40% 80%;
-    --sidebar-primary: 217 91% 60%; /* Blue accent for primary items in sidebar */
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 216 34% 17%; /* Dark accent for sidebar */
-    --sidebar-accent-foreground: 210 40% 85%;
-    --sidebar-border: 222 47% 12%;
-    --sidebar-ring: 217 91% 60%;
+    --border: 240 3.7% 15.9%; /* Darker borders */
+    --input: 240 3.7% 15.9%; /* Darker input fields */
+    --ring: 262 83% 70%; /* Lighter Purple Ring */
+    --chart-1: 262 74% 60%; /* Use accent for chart */
+    --chart-2: 262 65% 55%;
+    --chart-3: 262 55% 50%;
+    --chart-4: 262 45% 45%;
+    --chart-5: 262 35% 40%;
+    --sidebar-background: 240 6% 6%; /* Very dark sidebar */
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 262 83% 70%; /* Purple accent for primary items in sidebar */
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 3.7% 15.9%; /* Dark accent for sidebar */
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 3.7% 10%; /* Slightly darker border for sidebar */
+    --sidebar-ring: 262 83% 70%; /* Purple ring */
   }
 }
 
@@ -107,3 +108,4 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--foreground));
 }
+
