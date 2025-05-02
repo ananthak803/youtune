@@ -60,19 +60,19 @@ export default function Home() {
                  <Youtube className="h-5 w-5" />
                </Button>
              </SheetTrigger>
-             <SheetContent side="right" className="w-full sm:max-w-md flex flex-col"> {/* Adjusted width and flex */}
-               <SheetHeader>
+             {/* Adjust SheetContent: remove padding, use flex, and let YoutubeSearch handle scrolling */}
+             <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0"> {/* Removed default padding */}
+                {/* Keep Header for title, but add padding here */}
+               <SheetHeader className="px-6 pt-6 pb-4 border-b"> {/* Add padding and border to header */}
                  <SheetTitle>Search YouTube</SheetTitle>
                  <SheetDescription>
                    Find videos and add them to your playlists.
                  </SheetDescription>
                </SheetHeader>
-               {/* Wrap YoutubeSearch in a ScrollArea if content might overflow */}
-               <ScrollArea className="flex-1">
-                  <div className="p-4"> {/* Add padding if needed */}
-                    <YoutubeSearch />
-                  </div>
-               </ScrollArea>
+               {/* YoutubeSearch component now manages its own layout and scrolling within this container */}
+               <div className="flex-1 overflow-hidden flex flex-col px-4"> {/* Add padding around search content */}
+                  <YoutubeSearch />
+               </div>
              </SheetContent>
            </Sheet>
 
@@ -80,9 +80,6 @@ export default function Home() {
             <div className="container mx-auto px-4 py-8 md:px-8">
               {/* AddSongForm doesn't need the viewed playlist ID for adding songs anymore */}
               <AddSongForm selectedPlaylistId={null} />
-
-              {/* YouTube Search Section is now removed from here */}
-              {/* <YoutubeSearch /> */}
 
               <Separator className="my-8" /> {/* Add a separator */}
 
@@ -104,4 +101,3 @@ export default function Home() {
     </div>
   );
 }
-

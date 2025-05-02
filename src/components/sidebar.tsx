@@ -74,12 +74,12 @@ export function Sidebar({
       {/* Create Playlist Button at Bottom */}
       <div className="mt-auto pb-1 px-1"> {/* mt-auto pushes to bottom, add padding */}
          <Button
-            variant="ghost" // Use ghost variant for subtle look
-            className="w-full justify-start h-9 rounded-md text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" // Match playlist item style
+            variant="outline" // Changed to outline for better visibility
+            className="w-full justify-start h-9 rounded-md text-sm border-sidebar-border text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-accent" // Match playlist item style, adjust border
             onClick={() => setIsCreateDialogOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Create Playlist
+            Create New Playlist
           </Button>
       </div>
 

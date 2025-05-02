@@ -1,3 +1,4 @@
+
 // src/components/youtube-search.tsx
 'use client';
 
@@ -16,13 +17,14 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card } from '@/components/ui/card'; // Keep Card for individual results
+import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { searchYoutubeAction } from '@/actions/youtube-actions';
 import type { YoutubeSearchResult, Song, Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { SelectPlaylistDialog } from './select-playlist-dialog';
-import { ListPlus, Search, Loader2 } from 'lucide-react';
+import { ListPlus, Search, Loader2, Music } from 'lucide-react'; // Added Music icon for placeholder
+import { ScrollArea } from '@/components/ui/scroll-area'; // Import ScrollArea
 
 const searchSchema = z.object({
   query: z.string().min(1, { message: 'Please enter a search term.' }),
@@ -53,8 +55,6 @@ export function YoutubeSearch() {
   async function onSubmit(values: SearchFormValues) {
     setIsLoading(true);
     setHasSearched(true); // Mark that a search has been attempted
-    // Keep previous results while loading to avoid flicker/layout shift
-    // setSearchResults([]);
     try {
       const results = await searchYoutubeAction(values.query);
       setSearchResults(results); // Update results only after fetching
@@ -84,7 +84,6 @@ export function YoutubeSearch() {
       title: result.title,
       author: result.author,
       url: `https://www.youtube.com/watch?v=${result.videoId}`,
-      // Ensure we use the correct thumbnail URL (hqdefault used in service now)
       thumbnailUrl: result.thumbnailUrl,
     };
     setSongToAdd(song);
@@ -131,88 +130,113 @@ export function YoutubeSearch() {
     }
   };
 
+  // Simple placeholder rendering
+  const renderPlaceholder = () => (
+     <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-2 text-center px-4">
+        <Search className="w-10 h-10 opacity-50" />
+        <p className="text-sm">Search YouTube to find videos and add them to your playlists.</p>
+     </div>
+  );
+
   return (
     <>
-      <div className="space-y-4"> {/* Adjusted spacing */}
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-2 md:flex-nowrap md:gap-4">
-              <FormField
-                control={form.control}
-                name="query"
-                render={({ field }) => (
-                  <FormItem className="flex-1 min-w-[150px]">
-                    <FormLabel className="sr-only">Search Term</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Enter song title, artist..."
-                        {...field}
-                        disabled={isLoading}
-                        aria-label="YouTube Search Input"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" disabled={isLoading} aria-label="Search YouTube">
-                {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Search className="mr-2 h-4 w-4" />}
-                Search
-              </Button>
-            </form>
-          </Form>
+      {/* Removed outer div, rely on SheetContent padding */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-center gap-2 sticky top-0 bg-background z-10 py-4 border-b mb-4"> {/* Make form sticky */}
+          <FormField
+            control={form.control}
+            name="query"
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormLabel className="sr-only">Search Term</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Search videos..."
+                    {...field}
+                    disabled={isLoading}
+                    aria-label="YouTube Search Input"
+                    className="h-9" // Slightly smaller input
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button type="submit" disabled={isLoading} aria-label="Search YouTube" size="sm"> {/* Smaller button */}
+            {isLoading ? <Loader2 className="animate-spin h-4 w-4" /> : <Search className="h-4 w-4" />}
+            <span className="sr-only sm:not-sr-only sm:ml-2">Search</span> {/* Hide text on small screens */}
+          </Button>
+        </form>
+      </Form>
 
-        {isLoading && (
-          <div className="flex justify-center items-center p-8">
-              <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
-          </div>
-        )}
+      {/* Results Area */}
+      <div className="flex-1 overflow-y-auto pb-4"> {/* Allow results to scroll */}
+         {isLoading && (
+           <div className="flex justify-center items-center py-8">
+               <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+           </div>
+         )}
 
-        {!isLoading && searchResults.length > 0 && (
-          <div className="mt-4"> {/* Adjusted top margin */}
-            <h3 className="text-lg font-semibold mb-3">Results</h3>
-            <div className="space-y-3">
-              {searchResults.map((result) => (
-                // Increase vertical padding on the Card for more height
-                <Card key={result.videoId} className="flex items-center p-3 py-4 gap-3"> {/* Removed overflow-hidden */}
-                   {/* Use a fixed width and aspect ratio for the image container */}
-                   <div className="w-[80px] h-[60px] flex-shrink-0 relative rounded overflow-hidden">
-                       <Image
-                            src={result.thumbnailUrl || '/placeholder-album.svg'}
-                            alt={result.title} // Use title as alt text
-                            fill // Use fill to cover the container
-                            sizes="(max-width: 768px) 80px, 80px" // Provide sizes hint
-                            className="object-cover" // Ensure image covers the area
-                            data-ai-hint="youtube video thumbnail"
-                            onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
-                        />
-                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-sm">{result.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{result.author}</p>
+         {!isLoading && searchResults.length > 0 && (
+           <div className="space-y-2"> {/* Reduced space between results */}
+             {searchResults.map((result) => (
+               <Card key={result.videoId} className="flex items-center p-2 gap-3 group hover:bg-muted/50 transition-colors"> {/* Use p-2, group hover */}
+                  {/* Image Container */}
+                  <div className="w-16 h-12 flex-shrink-0 relative rounded overflow-hidden bg-muted">
+                      <Image
+                           src={result.thumbnailUrl || '/placeholder-album.svg'}
+                           alt={result.title}
+                           fill
+                           sizes="64px"
+                           className="object-cover"
+                           data-ai-hint="youtube video thumbnail"
+                           onError={(e) => {
+                             // Optionally replace with a placeholder icon on error
+                             e.currentTarget.style.display = 'none';
+                             const parent = e.currentTarget.parentElement;
+                             if (parent && !parent.querySelector('.placeholder-icon')) {
+                               const icon = document.createElement('div');
+                               icon.className = 'placeholder-icon absolute inset-0 flex items-center justify-center text-muted-foreground';
+                               icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-music h-6 w-6"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+                               parent.appendChild(icon);
+                             }
+                           }}
+                       />
+                        {/* Fallback Icon structure (hidden initially, shown if image fails via JS above) */}
+                        {/* <div className="absolute inset-0 flex items-center justify-center text-muted-foreground" style={{ display: 'none' }}>
+                           <Music className="h-6 w-6" />
+                        </div> */}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground" // Removed transition-opacity
-                    onClick={() => handleInitiateAddSong(result)}
-                    aria-label={`Add "${result.title}" to playlist`}
-                    // Disable if the selection dialog is open OR if this specific song is the one currently being processed for adding
-                    disabled={isSelectPlaylistDialogOpen || (songToAdd !== null && songToAdd.id === result.videoId)}
-                  >
-                    <ListPlus className="h-5 w-5" />
-                  </Button>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
+                 {/* Text Content */}
+                 <div className="flex-1 min-w-0">
+                   <p className="font-medium truncate text-sm leading-tight">{result.title}</p>
+                   <p className="text-xs text-muted-foreground truncate">{result.author}</p>
+                 </div>
+                 {/* Add Button */}
+                 <Button
+                   variant="ghost"
+                   size="icon"
+                   className="h-8 w-8 flex-shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity" // Show on hover/focus
+                   onClick={() => handleInitiateAddSong(result)}
+                   aria-label={`Add "${result.title}" to playlist`}
+                   disabled={isSelectPlaylistDialogOpen || (songToAdd !== null && songToAdd.id === result.videoId)}
+                 >
+                   <ListPlus className="h-5 w-5" />
+                 </Button>
+               </Card>
+             ))}
+           </div>
+         )}
 
-         {/* Show "No results found" only if a search was done and there are no results */}
+         {/* Show placeholder or "No results" message */}
+         {!isLoading && !hasSearched && searchResults.length === 0 && renderPlaceholder()}
          {!isLoading && hasSearched && searchResults.length === 0 && (
-             <p className="text-muted-foreground text-sm text-center mt-6">No results found.</p>
+              <p className="text-muted-foreground text-sm text-center py-8">No results found.</p>
          )}
       </div>
 
+
+      {/* Dialog remains the same */}
       <SelectPlaylistDialog
         isOpen={isSelectPlaylistDialogOpen}
         onOpenChange={(open) => {
