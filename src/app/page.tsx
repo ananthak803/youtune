@@ -5,9 +5,9 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
-import { AddSongForm } from '@/components/add-song-form';
-import { YoutubeSearch } from '@/components/youtube-search';
-import { QueueView } from '@/components/queue-view';
+import { AddSongForm } from '@/components/add-song-form'; // Re-import AddSongForm
+import { YoutubeSearch } from '@/components/youtube-search'; // Import the search component
+import { QueueView } from '@/components/queue-view'; // Import QueueView
 import type { Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -77,22 +77,23 @@ export default function Home() {
               {/* Add Song Form (via URL) & Search Button Container */}
               <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   <div className="flex-1 w-full">
-                    <AddSongForm />
+                    <AddSongForm /> {/* Include the AddSongForm again */}
                   </div>
                   {/* Button to open YouTube Search (Now part of the flow) */}
                   <Sheet open={isSearchSidebarOpen} onOpenChange={setIsSearchSidebarOpen}>
                     <SheetTrigger asChild>
-                      <Button
+                       <Button
                         variant="outline"
                         size="default" // Adjust size as needed
                         className="w-full sm:w-auto flex items-center gap-2 shrink-0"
                         aria-label="Search YouTube"
-                      >
+                       >
                         <Youtube className="h-5 w-5 text-destructive" /> {/* YouTube Icon */}
                         Search YouTube
-                      </Button>
+                       </Button>
                     </SheetTrigger>
-                    <SheetContent side="right" className="w-full sm:max-w-lg md:max-w-xl flex flex-col p-0">
+                    {/* Apply padding directly here or remove p-0 */}
+                    <SheetContent side="right" className="w-full sm:max-w-lg md:max-w-xl flex flex-col">
                        <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 border-b">
                          <SheetTitle>Search YouTube</SheetTitle>
                          <SheetDescription>
@@ -124,12 +125,6 @@ export default function Home() {
             </div>
           </ScrollArea>
         </main>
-
-        {/* --- REMOVED Queue Sidebar Trigger --- */}
-        {/* <Sheet open={isQueueSidebarOpen} onOpenChange={setIsQueueSidebarOpen}> ... </Sheet> */}
-         {/* --- REMOVED Queue Sidebar Content --- */}
-        {/* <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0"> ... <QueueView /> ... </SheetContent> */}
-
 
       </div>
       {/* Player */}
@@ -164,20 +159,10 @@ export default function Home() {
              <Search className="h-5 w-5" />
              Search
            </Button>
-           {/* --- REMOVED Queue Sheet Trigger from Mobile Nav --- */}
-           {/* <Button
-             variant="ghost"
-             size="sm"
-             onClick={() => setIsQueueSidebarOpen(true)}
-             className="flex flex-col h-auto items-center gap-1 text-muted-foreground text-xs"
-           >
-             <ListOrdered className="h-5 w-5" />
-             Queue
-           </Button> */}
+
            {/* Add other mobile navigation items here if needed */}
          </nav>
        )}
     </div>
   );
 }
-
