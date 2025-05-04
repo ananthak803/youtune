@@ -27,7 +27,7 @@ import {
   SheetDescription,
   SheetTrigger,
 } from '@/components/ui/sheet'; // Import Sheet components
-import { QueueView } from '@/components/queue-view'; // Import QueueView
+import { QueueView } from './queue-view'; // Import QueueView
 import {
   usePlaylistStore,
   setPlayerRef,
@@ -98,7 +98,7 @@ export function Player() {
   }));
 
   const playerRef = useRef<ReactPlayer>(null);
-  const [seeking, setSeeking] = useState(false);
+  const [seeking, setSeeking] = useState(false); // State to track if user is interacting with slider
   const [seekValue, setSeekValue] = useState<number | null>(null); // Local state for slider value during drag
   const [localVolume, setLocalVolume] = useState(volume);
   const [hasMounted, setHasMounted] = useState(false);
@@ -206,48 +206,59 @@ export function Player() {
     }, [playNextSong, hasMounted]);
 
 
-  // Called when user starts dragging the slider thumb
-  const handleSeekMouseDown = (e: React.PointerEvent<HTMLDivElement>) => {
-     if (!currentSong) return;
-     console.log("[Player Seek] Pointer Down");
-     isSeekingRef.current = true; // Use ref for immediate update
-     setSeeking(true); // Update state for UI changes if needed
-     // Initialize local seek value with current progress
-     setSeekValue(currentSongProgress);
-     // Prevent text selection during drag
-     document.body.style.userSelect = 'none';
-  };
-
-  // Update local seek value while dragging
-  const handleSeekChange = (value: number[]) => {
-     if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Use ref
-     setSeekValue(value[0]);
-  };
-
-  // Finalize seek on pointer up (replaces mouse up)
-  const handleSeekPointerUp = (value: number[]) => {
-    if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Use ref
-    const finalSeekTime = value[0];
-    console.log(`[Player Seek] Pointer Up. Seeking to: ${finalSeekTime}`);
-
-    // Seek the actual player
-    if (playerRef.current) {
-        playerRef.current.seekTo(finalSeekTime, 'seconds'); // Specify 'seconds'
+ // Called when user starts dragging the slider thumb
+ const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!currentSong) return;
+    // Only trigger seek if the event target is the slider thumb or track itself
+    const target = event.target as HTMLElement;
+    if (target.closest('[role="slider"]')) {
+        console.log("[Player Seek] Pointer Down on Slider");
+        isSeekingRef.current = true; // Use ref for immediate update
+        setSeeking(true); // Update state for UI changes if needed
+        // Initialize local seek value with current progress
+        setSeekValue(currentSongProgress);
+        // Prevent text selection during drag
+        document.body.style.userSelect = 'none';
+    } else {
+         console.log("[Player Seek] Pointer Down outside slider thumb/track, ignoring.");
     }
+ };
 
-    // Update the global progress state *immediately*
-    setCurrentSongProgress(finalSeekTime);
 
-    // Reset seeking state *immediately*
-    isSeekingRef.current = false; // Use ref
-    setSeeking(false); // Update state
-    setSeekValue(null); // Clear local seek value after a short delay to allow UI to catch up
-    setTimeout(() => setSeekValue(null), 50); // Clear local seek value
+ // Update local seek value while dragging
+ const handleValueChange = (value: number[]) => {
+    if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Use ref
+    console.log(`[Player Seek] Value Change (Dragging): ${value[0]}`);
+    setSeekValue(value[0]);
+ };
 
-    console.log("[Player Seek] Finished seek, reset seeking state.");
-    // Re-enable text selection
-    document.body.style.userSelect = '';
-  };
+
+ // Finalize seek on value commit (usually pointer up)
+ const handleValueCommit = (value: number[]) => {
+   if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Check ref
+   const finalSeekTime = value[0];
+   console.log(`[Player Seek] Value Commit (Pointer Up). Seeking to: ${finalSeekTime}`);
+
+   // Seek the actual player
+   if (playerRef.current) {
+     playerRef.current.seekTo(finalSeekTime, 'seconds');
+   }
+
+   // Update the global progress state *immediately*
+   setCurrentSongProgress(finalSeekTime);
+
+   // Reset seeking state *immediately* after a very short delay
+   // This delay helps prevent the handleProgress callback triggered by seekTo
+   // from ignoring the update due to the seeking ref still being true.
+   setTimeout(() => {
+       isSeekingRef.current = false;
+       setSeeking(false); // Update state
+       setSeekValue(null); // Clear local seek value
+       console.log("[Player Seek] Finished seek, reset seeking state.");
+       // Re-enable text selection
+       document.body.style.userSelect = '';
+   }, 50); // 50ms delay seems reasonable
+ };
 
 
   const handleVolumeChange = (value: number[]) => {
@@ -436,25 +447,25 @@ export function Player() {
              </Button>
           </div>
           {/* Progress Bar Section */}
-          <div className="flex w-full max-w-xl items-center gap-2 px-2 select-none"> {/* Added select-none here */}
-            <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
-              {formatTime(displayProgress)}
-            </span>
-            <Slider
-              value={[displayProgress]}
-              max={Math.max(displayDuration, 1)} // Ensure max is at least 1 to prevent errors
-              step={0.1}
-              className={cn("flex-1", !currentSong && "opacity-50")} // Use base slider styles, slightly dimmer when no song
-              onValueChange={handleSeekChange} // Changed to update local state only
-              onPointerDown={handleSeekMouseDown}
-              onPointerUp={handleSeekPointerUp} // Use pointer up for touch/mouse
-              disabled={!currentSong || !currentSongDuration}
-              aria-label="Song progress"
-            />
-            <span className="text-xs text-muted-foreground w-10 text-left tabular-nums">
-              {formatTime(displayDuration)}
-            </span>
-          </div>
+           <div className="flex w-full max-w-xl items-center gap-2 px-2 select-none"> {/* Add select-none here */}
+             <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
+               {formatTime(displayProgress)}
+             </span>
+             <Slider
+               value={[displayProgress]}
+               max={Math.max(displayDuration, 1)} // Ensure max is at least 1
+               step={0.1}
+               className={cn("flex-1", !currentSong && "opacity-50")}
+               onValueChange={handleValueChange} // Update local state while dragging
+               onValueCommit={handleValueCommit} // Finalize seek on commit (pointer up)
+               onPointerDown={handlePointerDown} // Track start of interaction
+               disabled={!currentSong || !currentSongDuration}
+               aria-label="Song progress"
+             />
+             <span className="text-xs text-muted-foreground w-10 text-left tabular-nums">
+               {formatTime(displayDuration)}
+             </span>
+           </div>
         </div>
 
         {/* Volume & Queue Controls */}
