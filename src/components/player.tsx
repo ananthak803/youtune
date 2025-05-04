@@ -429,20 +429,23 @@ export function Player() {
               max={Math.max(displayDuration, 1)} // Ensure max is at least 1 to prevent errors
               step={0.1}
               className={cn(
-                "flex-1 h-1.5 group", // Make track slightly thicker, add group for hover effects
-                "[&>span:first-child]:h-full [&>span:first-child>span]:h-full", // Track and Range styles
-                "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent", // Range color change on hover
-                // Thumb styles: initially smaller, expands on hover, always visible if song exists
-                "[&>button]:h-1.5 [&>button]:w-1.5 [&>button]:bg-primary [&>button]:border-0 [&>button]:rounded-full",
-                "[&>button]:opacity-0 group-hover:[&>button]:opacity-100", // Thumb appears on hover
-                "[&>button]:transition-all [&>button]:duration-150", // Smooth transition
-                 currentSong && "[&>button]:opacity-100", // Keep visible if song playing
-                 !currentSong && "[&>button]:hidden", // Hide thumb if no song
-                 seeking && "[&>button]:scale-150" // Scale up thumb when actively seeking
+                "flex-1 h-1.5 group cursor-pointer", // Make track slightly thicker, add group for hover effects, cursor pointer
+                // Track styling
+                "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
+                // Range styling
+                "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
+                // Thumb styles: Always visible if song exists, small size, scales up on hover/seek
+                "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Smaller base size
+                "[&>button]:opacity-0", // Initially hidden
+                "[&>button]:transition-all [&>button]:duration-150",
+                currentSong && "[&>button]:opacity-100", // Visible if song playing
+                "group-hover:[&>button]:scale-125", // Scale up slightly on hover over the slider area
+                 seeking && "[&>button]:scale-150", // Scale up more when actively seeking
+                 !currentSong && "[&>button]:hidden" // Hide thumb if no song
                 )}
               onValueChange={handleSeekChange}
               onPointerDown={handleSeekMouseDown}
-              onValueCommit={handleSeekMouseUp} // Use commit for final value
+              onPointerUp={handleSeekMouseUp} // Changed to pointerUp for consistency
               disabled={!currentSong || !currentSongDuration}
               aria-label="Song progress"
             />
@@ -453,7 +456,7 @@ export function Player() {
         </div>
 
         {/* Volume & Queue Controls */}
-        <div className="flex items-center justify-end gap-2 w-1/4 lg:w-1/3">
+        <div className="flex items-center justify-end gap-3 w-1/4 lg:w-1/3">
            {/* Queue Button & Sheet */}
             <Sheet open={isQueueSheetOpen} onOpenChange={setIsQueueSheetOpen}>
               <SheetTrigger asChild>
@@ -480,30 +483,33 @@ export function Player() {
                </SheetContent>
             </Sheet>
 
-          {/* Mute/Unmute Button */}
+          {/* Volume Icon (for mute status and indicator) */}
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleMute}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
             aria-label={isMuted ? 'Unmute' : 'Mute'}
           >
             {getVolumeIcon()}
           </Button>
-          {/* Volume Slider */}
+          {/* Volume Slider - Always Visible */}
           <Slider
             value={[isMuted ? 0 : localVolume]}
             max={1}
             step={0.01}
              className={cn(
-               "w-24 h-1.5 group", // Add group for hover effects
-               "[&>span:first-child]:h-full [&>span:first-child>span]:h-full", // Track and Range styles
-               "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent", // Range color change on hover
-               // Thumb styles: initially smaller, expands on hover
-               "[&>button]:h-1.5 [&>button]:w-1.5 [&>button]:bg-primary [&>button]:border-0 [&>button]:rounded-full",
-               "[&>button]:opacity-0 group-hover:[&>button]:opacity-100", // Thumb appears on hover
-               "[&>button]:transition-opacity [&>button]:duration-150", // Smooth transition
-               (localVolume > 0 || seeking) && "[&>button]:opacity-100" // Keep visible if volume > 0 or seeking
+               "w-24 h-1.5 group cursor-pointer", // Always visible width, group for hover, pointer cursor
+               // Track styling
+               "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
+               // Range styling
+               "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
+               // Thumb styles: Always visible, small size, scales up on hover/drag
+               "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Smaller base size
+               "[&>button]:opacity-100", // Always visible
+               "[&>button]:transition-transform [&>button]:duration-150", // Smooth transition
+               "hover:[&>button]:scale-125", // Scale up on hover over the slider area
+               seeking && "[&>button]:scale-150" // Scale up more when dragging
              )}
             onValueChange={handleVolumeChange}
             aria-label="Volume"
