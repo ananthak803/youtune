@@ -35,6 +35,7 @@ import {
   useCurrentSongPlaylistContext, // Import the hook for context
 } from '@/store/playlist-store';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast'; // Import toast
 
 // Simple debounce function
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
@@ -110,10 +111,12 @@ export function Player() {
   }, []);
 
   useEffect(() => {
-    if (!seeking) {
+    // Update local volume only if not seeking and the store volume changes
+    if (!seeking && volume !== localVolume) {
        setLocalVolume(volume);
     }
-  }, [volume, seeking]);
+  }, [volume, seeking, localVolume]); // Added localVolume dependency
+
 
   useEffect(() => {
      const newSongId = currentSong?.id ?? null;
@@ -126,8 +129,9 @@ export function Player() {
              console.log("[Player Effect] No current song, resetting progress and duration.");
          } else {
              // Optionally reset progress here if needed, though store might handle it
-             // setCurrentSongProgress(0);
-             console.log(`[Player Effect] New song "${currentSong.title}" loaded.`);
+             setCurrentSongProgress(0); // Reset progress for new song
+             setCurrentSongDuration(0); // Reset duration, wait for onDuration
+             console.log(`[Player Effect] New song "${currentSong.title}" loaded. Progress/Duration reset.`);
          }
      }
   }, [currentSong, setCurrentSongProgress, setCurrentSongDuration]);
@@ -178,7 +182,7 @@ export function Player() {
     (duration: number) => {
        if (hasMounted && currentSongIdRef.current) {
            const validDuration = duration > 0 ? duration : 0;
-           // console.log(`[Player HandleDuration] Received duration: ${duration}, Setting: ${validDuration}`);
+           console.log(`[Player HandleDuration] Received duration: ${duration}, Setting: ${validDuration}`);
            setCurrentSongDuration(validDuration);
            // If duration is very small or zero, and progress is already non-zero, reset progress.
            if (validDuration < 1 && currentSongProgress > 0) {
@@ -232,8 +236,16 @@ export function Player() {
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
-    setLocalVolume(newVolume);
-    setVolume(newVolume); // Update global state via action
+    setLocalVolume(newVolume); // Update local state for immediate UI feedback
+    setVolume(newVolume); // Update global state via action (might be debounced if needed)
+    // If user drags volume > 0 while muted, unmute
+    if (isMuted && newVolume > 0) {
+        toggleMute();
+    }
+    // If user drags volume to 0, mute
+    if (!isMuted && newVolume === 0) {
+        toggleMute();
+    }
   };
 
    // --- Loop Logic ---
@@ -281,7 +293,7 @@ export function Player() {
 
 
   return (
-    <footer className="border-t border-border bg-card p-4">
+    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-4 sticky bottom-0 z-50">
       {/* Conditional ReactPlayer mount */}
       {hasMounted && currentSong?.url && (
         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
@@ -300,19 +312,18 @@ export function Player() {
                 config={{
                     youtube: { playerVars: { playsinline: 1, controls: 0 } }, // Ensure YouTube controls are off
                 }}
-                // onError can be added here to handle playback errors
-                onError={(e) => {
-                    console.error("[ReactPlayer Error]", e);
-                    toast({ title: "Playback Error", description: "Could not play the selected video.", variant: "destructive" });
-                    // Optionally skip to the next song on error
-                    // playNextSong();
+                onError={(e, data, hlsInstance?, hlsGlobal?) => {
+                    console.error("[ReactPlayer Error]", e, data);
+                    toast({ title: "Playback Error", description: "Could not play the selected video. Skipping...", variant: "destructive" });
+                    // Skip to the next song on error
+                    playNextSong();
                 }}
             />
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         {/* Song Info */}
-        <div className="flex items-center gap-3 w-1/3 min-w-0">
+        <div className="flex items-center gap-3 w-1/4 lg:w-1/3 min-w-0">
           {currentSong ? (
             <>
               <Image
@@ -320,23 +331,23 @@ export function Player() {
                 alt={currentSong.title || 'Album Art'}
                 width={56}
                 height={56}
-                className="rounded flex-shrink-0"
+                className="rounded-md flex-shrink-0 aspect-square object-cover"
                 data-ai-hint="music album cover"
                 unoptimized // Added for ytimg URLs if not in next.config.js
                 onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
               />
               <div className="overflow-hidden">
-                <p className="font-semibold truncate text-sm">{currentSong.title || 'Unknown Title'}</p>
+                <p className="font-semibold truncate text-sm leading-tight">{currentSong.title || 'Unknown Title'}</p>
                 <p className="text-xs text-muted-foreground truncate">{currentSong.author || 'Unknown Artist'}</p>
               </div>
             </>
           ) : (
              <div className="flex items-center gap-3 opacity-50">
-              <div className="h-14 w-14 rounded bg-muted flex items-center justify-center flex-shrink-0">
+              <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music text-muted-foreground"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
               </div>
               <div className="overflow-hidden">
-                <p className="font-semibold text-sm">No song playing</p>
+                <p className="font-semibold text-sm leading-tight">No song playing</p>
                 <p className="text-xs text-muted-foreground">Select a song</p>
               </div>
             </div>
@@ -344,14 +355,14 @@ export function Player() {
         </div>
 
         {/* Player Controls */}
-        <div className="flex flex-col items-center gap-2 w-1/3">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col items-center gap-1 w-1/2 lg:w-1/3">
+          <div className="flex items-center gap-3 sm:gap-4">
             {/* Shuffle Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleShuffle}
-              className={cn('h-8 w-8', isShuffling && !disablePlaylistControls && 'text-accent')}
+              className={cn('h-8 w-8 text-muted-foreground hover:text-foreground transition-colors', isShuffling && !disablePlaylistControls && 'text-accent')}
               disabled={disablePlaylistControls} // Use the specific disable flag
               aria-label={isShuffling ? 'Disable shuffle' : 'Enable shuffle'}
             >
@@ -362,18 +373,21 @@ export function Player() {
               variant="ghost"
               size="icon"
               onClick={playPreviousSong}
-              className="h-8 w-8"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
               disabled={!currentSong} // Disabled only if no song is loaded
               aria-label="Previous song / Restart"
             >
-              <SkipBack className="h-4 w-4" />
+              <SkipBack className="h-5 w-5 fill-current" />
             </Button>
             {/* Play/Pause Button */}
             <Button
               variant="default"
               size="icon"
               onClick={togglePlayPause}
-              className="h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+              className={cn(
+                 "h-10 w-10 rounded-full transition-transform duration-100 ease-in-out",
+                 "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 shadow-md hover:shadow-lg"
+               )}
               disabled={!currentSong} // Disabled only if no song is loaded
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
@@ -384,18 +398,18 @@ export function Player() {
               variant="ghost"
               size="icon"
               onClick={playNextSong}
-              className="h-8 w-8"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
               disabled={!currentSong} // Disabled only if no song is loaded
               aria-label="Next song"
             >
-              <SkipForward className="h-4 w-4" />
+              <SkipForward className="h-5 w-5 fill-current" />
             </Button>
             {/* Combined Loop Button */}
              <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleLoopToggle}
-                className={cn('h-8 w-8',
+                className={cn('h-8 w-8 text-muted-foreground hover:text-foreground transition-colors',
                     // Highlight if single song loop OR playlist loop (when not in single mode) is active
                     (isLooping || (isLoopingPlaylist && !disablePlaylistControls)) && 'text-accent'
                  )}
@@ -405,8 +419,9 @@ export function Player() {
                 {getLoopIcon()}
              </Button>
           </div>
-          <div className="flex w-full max-w-md items-center gap-2">
-            <span className="text-xs text-muted-foreground w-10 text-right">
+          {/* Progress Bar Section */}
+          <div className="flex w-full max-w-xl items-center gap-2 px-2">
+            <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
               {formatTime(displayProgress)}
             </span>
             <Slider
@@ -414,27 +429,31 @@ export function Player() {
               max={Math.max(displayDuration, 1)} // Ensure max is at least 1 to prevent errors
               step={0.1}
               className={cn(
-                "flex-1",
-                "[&>span:first-child]:h-1 [&>span:first-child>span]:h-1", // Track and Range styles
-                "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0", // Thumb styles
-                "[&>button:hover]:scale-110 [&>button]:transition-transform", // Thumb hover effect
-                 !currentSong && "[&>button]:hidden" // Hide thumb if no song
+                "flex-1 h-1.5 group", // Make track slightly thicker, add group for hover effects
+                "[&>span:first-child]:h-full [&>span:first-child>span]:h-full", // Track and Range styles
+                "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent", // Range color change on hover
+                // Thumb styles: initially smaller, expands on hover, always visible if song exists
+                "[&>button]:h-1.5 [&>button]:w-1.5 [&>button]:bg-primary [&>button]:border-0 [&>button]:rounded-full",
+                "[&>button]:opacity-0 group-hover:[&>button]:opacity-100", // Thumb appears on hover
+                "[&>button]:transition-all [&>button]:duration-150", // Smooth transition
+                 currentSong && "[&>button]:opacity-100", // Keep visible if song playing
+                 !currentSong && "[&>button]:hidden", // Hide thumb if no song
+                 seeking && "[&>button]:scale-150" // Scale up thumb when actively seeking
                 )}
               onValueChange={handleSeekChange}
               onPointerDown={handleSeekMouseDown}
-              // Use onValueCommit for final value after dragging stops
-              onValueCommit={handleSeekMouseUp}
+              onValueCommit={handleSeekMouseUp} // Use commit for final value
               disabled={!currentSong || !currentSongDuration}
               aria-label="Song progress"
             />
-            <span className="text-xs text-muted-foreground w-10 text-left">
+            <span className="text-xs text-muted-foreground w-10 text-left tabular-nums">
               {formatTime(displayDuration)}
             </span>
           </div>
         </div>
 
         {/* Volume & Queue Controls */}
-        <div className="flex items-center justify-end gap-2 w-1/3">
+        <div className="flex items-center justify-end gap-2 w-1/4 lg:w-1/3">
            {/* Queue Button & Sheet */}
             <Sheet open={isQueueSheetOpen} onOpenChange={setIsQueueSheetOpen}>
               <SheetTrigger asChild>
@@ -442,7 +461,7 @@ export function Player() {
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "h-8 w-8",
+                      "h-8 w-8 text-muted-foreground hover:text-foreground transition-colors",
                       queue.length > 0 && "text-accent" // Highlight if queue has items
                     )}
                     aria-label="Show queue"
@@ -466,7 +485,7 @@ export function Player() {
             variant="ghost"
             size="icon"
             onClick={toggleMute}
-            className="h-8 w-8"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
             aria-label={isMuted ? 'Unmute' : 'Mute'}
           >
             {getVolumeIcon()}
@@ -476,11 +495,16 @@ export function Player() {
             value={[isMuted ? 0 : localVolume]}
             max={1}
             step={0.01}
-            className={cn(
-              "w-24",
-              "[&>span:first-child]:h-1 [&>span:first-child>span]:h-1", // Track and Range
-              "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0" // Thumb
-              )}
+             className={cn(
+               "w-24 h-1.5 group", // Add group for hover effects
+               "[&>span:first-child]:h-full [&>span:first-child>span]:h-full", // Track and Range styles
+               "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent", // Range color change on hover
+               // Thumb styles: initially smaller, expands on hover
+               "[&>button]:h-1.5 [&>button]:w-1.5 [&>button]:bg-primary [&>button]:border-0 [&>button]:rounded-full",
+               "[&>button]:opacity-0 group-hover:[&>button]:opacity-100", // Thumb appears on hover
+               "[&>button]:transition-opacity [&>button]:duration-150", // Smooth transition
+               (localVolume > 0 || seeking) && "[&>button]:opacity-100" // Keep visible if volume > 0 or seeking
+             )}
             onValueChange={handleVolumeChange}
             aria-label="Volume"
           />
@@ -489,6 +513,3 @@ export function Player() {
     </footer>
   );
 }
-
-// Re-import toast just in case it's needed here later
-import { toast } from '@/hooks/use-toast';
