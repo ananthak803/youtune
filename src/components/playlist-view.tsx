@@ -1,3 +1,4 @@
+// src/components/playlist-view.tsx
 
 'use client';
 
@@ -131,7 +132,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
 
 
   return (
-    <div className="mt-8">
+    <div className="mt-8 select-none"> {/* Added select-none to the main container */}
       <div className="flex items-center gap-4 mb-6 select-none"> {/* Added select-none */}
           <h2 className="text-3xl font-bold">{playlist.name}</h2>
           {playlist.songs.length > 0 && (
@@ -248,3 +249,5 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
     </div>
   );
 }
+
+    

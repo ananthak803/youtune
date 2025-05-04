@@ -109,7 +109,7 @@ export function QueueView() {
   }
 
   return (
-    <ScrollArea className="flex-1 overflow-y-auto">
+    <ScrollArea className="flex-1 overflow-y-auto select-none"> {/* Added select-none */}
       <div className="p-4 space-y-2">
         {/* Optional: Add a "Currently Playing" section */}
         {currentQueueIndex !== -1 && queue[currentQueueIndex] && (

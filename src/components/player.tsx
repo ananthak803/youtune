@@ -27,7 +27,7 @@ import {
   SheetDescription,
   SheetTrigger,
 } from '@/components/ui/sheet'; // Import Sheet components
-import { QueueView } from './queue-view'; // Import QueueView
+import { QueueView } from '@/components/queue-view'; // Import QueueView
 import {
   usePlaylistStore,
   setPlayerRef,
@@ -523,3 +523,5 @@ export function Player() {
     </footer>
   );
 }
+
+    
