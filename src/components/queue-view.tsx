@@ -1,10 +1,9 @@
-
 // src/components/queue-view.tsx
 'use client';
 
 import React from 'react';
 import Image from 'next/image';
-import { Play, Pause, Trash2, GripVertical, X } from 'lucide-react'; // Import Pause, X
+import { Play, Pause, Trash2, GripVertical, X, ListMusic } from 'lucide-react'; // Import Pause, X, ListMusic
 import { Button } from '@/components/ui/button';
 import { usePlaylistStore } from '@/store/playlist-store';
 import type { QueueSong } from '@/lib/types';
@@ -101,7 +100,7 @@ export function QueueView() {
 
   if (queue.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center">
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center select-none"> {/* Added select-none */}
          <ListMusic className="w-12 h-12 mb-4 opacity-30" />
         <p className="text-sm font-medium">Queue is empty</p>
         <p className="text-xs">Add songs or play a playlist to start.</p>
@@ -114,7 +113,7 @@ export function QueueView() {
       <div className="p-4 space-y-2">
         {/* Optional: Add a "Currently Playing" section */}
         {currentQueueIndex !== -1 && queue[currentQueueIndex] && (
-            <div className='mb-4 pb-4 border-b'>
+            <div className='mb-4 pb-4 border-b select-none'> {/* Added select-none */}
                 <p className="text-xs font-semibold uppercase text-muted-foreground mb-2 px-1">Now Playing</p>
                  <div
                     key={queue[currentQueueIndex].queueId + '-now'}
@@ -147,7 +146,7 @@ export function QueueView() {
             </div>
         )}
 
-        <p className="text-xs font-semibold uppercase text-muted-foreground mb-2 px-1">
+        <p className="text-xs font-semibold uppercase text-muted-foreground mb-2 px-1 select-none"> {/* Added select-none */}
             {currentQueueIndex !== -1 && queue.length > 1 ? 'Next Up' : 'Queue'}
         </p>
 
@@ -168,7 +167,7 @@ export function QueueView() {
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
               className={cn(
-                "group flex items-center gap-3 p-2 rounded-md cursor-grab transition-colors duration-150", // Added transition
+                "group flex items-center gap-3 p-2 rounded-md cursor-grab transition-colors duration-150 select-none", // Added select-none
                 "hover:bg-muted/50"
               )}
             >
@@ -220,5 +219,4 @@ export function QueueView() {
   );
 }
 
-// Placeholder for ListMusic icon if needed elsewhere, adjust imports as necessary
-import { ListMusic } from 'lucide-react';
+    

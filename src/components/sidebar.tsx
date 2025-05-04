@@ -67,7 +67,7 @@ export function Sidebar({
   return (
     <aside className="w-64 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-full max-h-dvh"> {/* Use dVH */}
       {/* App Title */}
-      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1">
+      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1 select-none"> {/* Added select-none */}
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><circle cx="12" cy="12" r="10"/><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           <h1 className="text-xl font-bold text-primary">YouTune</h1>
       </div>
@@ -90,7 +90,7 @@ export function Sidebar({
       <ScrollArea className="flex-1 -mx-1"> {/* Negative margin to offset button padding */}
         <nav className="flex flex-col gap-1 px-1 py-1">
           {playlists.map((playlist) => (
-            <div key={playlist.id} className="group relative flex items-center w-full">
+            <div key={playlist.id} className="group relative flex items-center w-full select-none"> {/* Added select-none */}
               <Button
                 variant={selectedPlaylistId === playlist.id ? 'secondary' : 'ghost'}
                 className={cn(
@@ -133,7 +133,7 @@ export function Sidebar({
             </div>
           ))}
            {playlists.length === 0 && (
-             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center">No playlists yet.</p>
+             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center select-none">No playlists yet.</p> {/* Added select-none */}
            )}
         </nav>
       </ScrollArea>
@@ -153,3 +153,5 @@ export function Sidebar({
     </aside>
   );
 }
+
+    

@@ -5,9 +5,9 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
-import { AddSongForm } from '@/components/add-song-form';
-import { YoutubeSearch } from '@/components/youtube-search';
-import { QueueView } from '@/components/queue-view';
+import { AddSongForm } from '@/components/add-song-form'; // Re-import AddSongForm
+import { YoutubeSearch } from '@/components/youtube-search'; // Import the search component
+import { QueueView } from '@/components/queue-view'; // Import QueueView
 import type { Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,13 +20,12 @@ import {
   DialogTitle,
   DialogDescription,
   DialogTrigger,
-  DialogClose,
  } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { Plus, ListMusic, Search, Settings, ListOrdered, Youtube, Link as LinkIcon } from 'lucide-react'; // Removed Share2
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
+import { Plus, ListMusic, Search, ListOrdered, Youtube, Link as LinkIcon } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { toast } from '@/hooks/use-toast';
+// Removed toast import as it's handled within components
 
 export default function Home() {
   // Get state from the store
@@ -57,16 +56,14 @@ export default function Home() {
      }
   };
 
-  // Removed handleSharePlaylist function
 
   return (
     <TooltipProvider>
       <div className="flex h-dvh flex-col bg-background text-foreground overflow-hidden"> {/* Use dvh for dynamic viewport height */}
         {/* Header for Mobile */}
         {isMobile && (
-          <header className="flex items-center justify-between p-3 border-b bg-card sticky top-0 z-20">
+          <header className="flex items-center justify-between p-3 border-b bg-card sticky top-0 z-20 select-none"> {/* Added select-none */}
               <h1 className="text-xl font-bold text-primary">YouTune</h1>
-              {/* Removed Share Button from Mobile Header */}
               {/* Spacer to keep title centered if needed, or remove if layout adjusts */}
               <div className="w-10 h-10"></div> {/* Placeholder for balance if needed */}
           </header>
@@ -157,13 +154,12 @@ export default function Home() {
                 {selectedPlaylistForView ? (
                   <>
                       <Separator className="my-6" />
-                      {/* Removed Share Button - Desktop */}
                       <PlaylistView playlist={selectedPlaylistForView} />
                   </>
                 ) : (
                   <>
                        <Separator className="my-6" />
-                       <div className="flex h-[50vh] items-center justify-center text-muted-foreground text-center px-4">
+                       <div className="flex h-[50vh] items-center justify-center text-muted-foreground text-center px-4 select-none"> {/* Added select-none */}
                            <p>Select or create a playlist to get started.</p>
                        </div>
                    </>
@@ -178,7 +174,7 @@ export default function Home() {
 
         {/* Mobile Bottom Navigation */}
         {isMobile && (
-          <nav className="flex justify-around items-center p-2 border-t bg-card sticky bottom-0 z-20">
+          <nav className="flex justify-around items-center p-2 border-t bg-card sticky bottom-0 z-20 select-none"> {/* Added select-none */}
             {/* Playlists Sheet Trigger */}
             <Sheet open={isPlaylistSheetOpen} onOpenChange={setIsPlaylistSheetOpen}>
               <SheetTrigger asChild>
@@ -239,7 +235,6 @@ export default function Home() {
                <SheetContent side="right" className="w-full max-w-md p-0 flex flex-col">
                  <SheetHeader className="p-4 border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                    <SheetTitle>Playback Queue</SheetTitle>
-                   {/* Adding Description for Accessibility */}
                    <SheetDescription className="sr-only">
                      View and manage the upcoming songs in your playback queue.
                    </SheetDescription>
@@ -254,3 +249,5 @@ export default function Home() {
     </TooltipProvider>
   );
 }
+
+    

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Play, Pause, Trash2, GripVertical, Share2 } from 'lucide-react'; // Import Pause, Share2
+import { Play, Pause, Trash2, GripVertical } from 'lucide-react'; // Import Pause
 import {
   Table,
   TableBody,
@@ -13,21 +13,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { usePlaylistStore } from '@/store/playlist-store';
+import { usePlaylistStore, useCurrentSongPlaylistContext } from '@/store/playlist-store';
 import type { Playlist, Song } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast'; // Import toast
 
 interface PlaylistViewProps {
   playlist: Playlist; // This is the playlist being *viewed*
-  // onShare: () => void; // Removed share handler prop
 }
 
 export function PlaylistView({ playlist }: PlaylistViewProps) {
   const {
     playSongInPlaylistContext, // Corrected function name
     removeSongFromPlaylist,
-    currentSong: currentSongFromStore, // Get the current song object
     isPlaying,
     reorderSongInPlaylist,
     playPlaylist,
@@ -38,7 +36,6 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
   } = usePlaylistStore((state) => ({
     playSongInPlaylistContext: state.playSongInPlaylistContext, // Corrected selector
     removeSongFromPlaylist: state.removeSongFromPlaylist,
-    currentSong: state.queue[state.currentQueueIndex] ?? null, // Derive current song
     isPlaying: state.isPlaying,
     reorderSongInPlaylist: state.reorderSongInPlaylist,
     playPlaylist: state.playPlaylist,
@@ -51,7 +48,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
    const { toast } = useToast(); // Use the toast hook
 
   const currentSong = queue[currentQueueIndex] ?? null;
-  const currentSongPlaylistContextId = usePlaylistStore(state => state.queue[state.currentQueueIndex]?.playlistContextId ?? null);
+  const currentSongPlaylistContextId = useCurrentSongPlaylistContext(); // Correct hook usage
 
 
   const [draggedItemIndex, setDraggedItemIndex] = React.useState<number | null>(null);
@@ -135,7 +132,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
 
   return (
     <div className="mt-8">
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 select-none"> {/* Added select-none */}
           <h2 className="text-3xl font-bold">{playlist.name}</h2>
           {playlist.songs.length > 0 && (
              <Button
@@ -153,14 +150,13 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
                 )}
              </Button>
           )}
-           {/* Removed Share Button */}
       </div>
       {playlist.songs.length === 0 ? (
-        <p className="text-muted-foreground">This playlist is empty. Add some songs!</p>
+        <p className="text-muted-foreground select-none">This playlist is empty. Add some songs!</p> {/* Added select-none */}
       ) : (
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="select-none"> {/* Added select-none */}
               <TableHead className="w-10"></TableHead>{/* Drag Handle */}
               <TableHead className="w-16"></TableHead>{/* Play/Pause Button */}
               <TableHead>Title</TableHead>
@@ -184,7 +180,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
                 className={cn(
-                  "group cursor-grab",
+                  "group cursor-grab select-none", // Added select-none
                    isCurrentPlayingSong && 'bg-accent/10', // Highlight only if playing from this playlist context
                    'hover:bg-muted/50'
                 )}
