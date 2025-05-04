@@ -17,7 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card, CardContent } from '@/components/ui/card'; // Use CardContent for padding
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { searchYoutubeAction, getYoutubeMetadataAction } from '@/actions/youtube-actions';
 import type { YoutubeSearchResult, Song, Playlist, YoutubeVideoMetadata } from '@/lib/types';
@@ -25,7 +25,6 @@ import { usePlaylistStore } from '@/store/playlist-store';
 import { SelectPlaylistDialog } from './select-playlist-dialog';
 import { ListPlus, Search, Loader2, Music, Youtube } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { extractYoutubeVideoId } from '@/services/youtube';
 import { cn } from '@/lib/utils';
 
 
@@ -37,15 +36,14 @@ type SearchFormValues = z.infer<typeof searchSchema>;
 
 export function YoutubeSearch() {
   const { toast } = useToast();
-  // Access store actions and state non-reactively for handlers
   const { addSongToPlaylist, createPlaylist } = usePlaylistStore.getState();
 
   const [searchResults, setSearchResults] = useState<YoutubeSearchResult[]>([]);
-  const [isLoadingSearch, setIsLoadingSearch] = useState(false); // For search operation
-  const [isLoadingMetadata, setIsLoadingMetadata] = useState<string | null>(null); // For metadata fetch per item
+  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState<string | null>(null); // Track loading state per item
   const [isSelectPlaylistDialogOpen, setIsSelectPlaylistDialogOpen] = useState(false);
   const [songToAdd, setSongToAdd] = useState<Song | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false); // Track if a search has been performed
 
   const form = useForm<SearchFormValues>({
     resolver: zodResolver(searchSchema),
@@ -56,8 +54,8 @@ export function YoutubeSearch() {
 
   async function onSubmit(values: SearchFormValues) {
     setIsLoadingSearch(true);
-    setHasSearched(true);
-    setSearchResults([]); // Clear previous results immediately
+    setHasSearched(true); // Mark that a search has been initiated
+    setSearchResults([]); // Clear previous results
     try {
       const results = await searchYoutubeAction(values.query);
       setSearchResults(results);
@@ -74,15 +72,15 @@ export function YoutubeSearch() {
         description: error instanceof Error ? error.message : 'Could not perform search.',
         variant: 'destructive',
       });
-      setSearchResults([]); // Ensure results are cleared on error
+      setSearchResults([]); // Clear results on error
     } finally {
       setIsLoadingSearch(false);
     }
   }
 
-  // Fetch metadata for a single video ID (used internally)
+  // Fetch full metadata for a single video ID
   const fetchMetadata = async (videoId: string): Promise<Song | null> => {
-    setIsLoadingMetadata(videoId); // Indicate loading for this specific item
+    setIsLoadingMetadata(videoId); // Set loading state for this specific item
     try {
       const metadata: YoutubeVideoMetadata = await getYoutubeMetadataAction(videoId);
       const song: Song = {
@@ -102,81 +100,78 @@ export function YoutubeSearch() {
       });
       return null;
     } finally {
-      setIsLoadingMetadata(null); // Clear loading indicator
+      setIsLoadingMetadata(null); // Clear loading state for this item
     }
   };
 
-  // Initiate adding process (fetch full metadata first)
+  // Initiate adding process (fetch metadata, then handle playlist selection)
   const handleInitiateAddSong = async (result: YoutubeSearchResult) => {
     const preparedSong = await fetchMetadata(result.videoId);
+    if (!preparedSong) return; // Stop if metadata fetch failed
 
-    if (!preparedSong) return;
+    setSongToAdd(preparedSong); // Store the song data temporarily
 
-    setSongToAdd(preparedSong);
-
-    // Get current playlists state directly
+    // Check playlist state
     const currentPlaylists = usePlaylistStore.getState().playlists;
-
     if (currentPlaylists.length === 0) {
-        // No playlists exist, create a default one
-        console.log("[YoutubeSearch] No playlists found. Creating default 'My Playlist'.");
-        createPlaylist("My Playlist"); // Call the store action
-        // Get the updated state immediately after creation
-        const updatedPlaylists = usePlaylistStore.getState().playlists;
+        // Create default playlist and add song directly
+        const defaultPlaylistName = "My Playlist";
+        createPlaylist(defaultPlaylistName);
+        const updatedPlaylists = usePlaylistStore.getState().playlists; // Get updated state
         if (updatedPlaylists.length > 0) {
-           const newPlaylistId = updatedPlaylists[0].id;
-           console.log(`[YoutubeSearch] Adding song to newly created playlist ID: ${newPlaylistId}`);
-           addSongToSpecificPlaylist(newPlaylistId, preparedSong, "My Playlist");
+             const newPlaylistId = updatedPlaylists[0].id;
+             addSongToSpecificPlaylist(newPlaylistId, preparedSong, defaultPlaylistName);
         } else {
-           console.error("[YoutubeSearch] Failed to create or find the new default playlist.");
-           toast({ title: "Error", description: "Could not create default playlist.", variant: "destructive" });
-           setSongToAdd(null);
+             console.error("[YoutubeSearch] Failed to create or find the new default playlist.");
+             toast({ title: "Error", description: "Could not create default playlist.", variant: "destructive" });
+             setSongToAdd(null);
         }
     } else if (currentPlaylists.length === 1) {
-      // Add directly to the only playlist
+      // Add directly to the only existing playlist
       addSongToSpecificPlaylist(currentPlaylists[0].id, preparedSong, currentPlaylists[0].name);
     } else {
-      // Multiple playlists exist, open dialog
+      // Open dialog to select playlist
       setIsSelectPlaylistDialogOpen(true);
     }
   };
 
-  // Final step after playlist selection (or if only one/default playlist exists)
+  // Called from SelectPlaylistDialog or directly if only one/default playlist
   const addSongToSpecificPlaylist = (playlistId: string, song: Song, playlistName?: string) => {
-    const added = addSongToPlaylist(playlistId, song);
+    const added = addSongToPlaylist(playlistId, song); // Use store action
     if (added) {
       toast({
         title: 'Song Added',
         description: `"${song.title}" added to playlist "${playlistName || 'Selected Playlist'}".`,
       });
     }
-    setSongToAdd(null);
-    setIsSelectPlaylistDialogOpen(false);
+    setSongToAdd(null); // Clear temporary song data
+    setIsSelectPlaylistDialogOpen(false); // Ensure dialog is closed
   };
 
-  // Called from the SelectPlaylistDialog
+  // Handle selection from the playlist dialog
   const handlePlaylistSelected = (playlistId: string) => {
     if (songToAdd) {
        const selectedPlaylist = usePlaylistStore.getState().playlists.find(p => p.id === playlistId);
       addSongToSpecificPlaylist(playlistId, songToAdd, selectedPlaylist?.name);
     } else {
-      console.error("Error: No song data available when playlist was selected.");
+      // Should not happen, but handle defensively
+      console.error("[YoutubeSearch] Error: No song data available when playlist was selected.");
       toast({ title: "Error", description: "Could not add song. Please try again.", variant: "destructive" });
       setIsSelectPlaylistDialogOpen(false);
       setSongToAdd(null);
     }
   };
 
-  // Placeholder rendering
+  // Render placeholder when no search has been done
   const renderPlaceholder = () => (
-     <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-4 text-center p-8">
+     <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-4 text-center p-8 select-none">
         <Youtube className="w-16 h-16 opacity-30 text-destructive" />
         <p className="text-base font-medium">Search YouTube</p>
         <p className="text-sm">Find videos and add them directly to your playlists.</p>
      </div>
   );
 
-  // Loading state rendering
+  // Render loading state during search
   const renderLoading = () => (
     <div className="flex justify-center items-center py-12 flex-col gap-4">
         <Loader2 className="animate-spin h-10 w-10 text-primary" />
@@ -184,11 +179,20 @@ export function YoutubeSearch() {
     </div>
   );
 
+  // Render "No results" message
+   const renderNoResults = () => (
+     <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-2 text-center p-8 select-none">
+       <Search className="w-12 h-12 opacity-30" />
+       <p className="text-sm mt-2">No results found.</p>
+       <p className="text-xs text-muted-foreground/80">Try searching for something else.</p>
+     </div>
+   );
+
   return (
     <>
       {/* Search Form */}
       <Form {...form}>
-        {/* Sticky form with background and border */}
+        {/* Sticky form part */}
         <form
           onSubmit={form.handleSubmit(onSubmit)}
           className="p-4 sticky top-0 bg-background/95 backdrop-blur-sm border-b z-10 mb-4"
@@ -208,7 +212,7 @@ export function YoutubeSearch() {
                         {...field}
                         disabled={isLoadingSearch}
                         aria-label="YouTube Search Input"
-                        className="h-9 pl-8 rounded-md focus-visible:ring-primary bg-muted border-transparent focus:border-border focus:bg-background" // Adjusted rounding
+                        className="h-9 pl-8 rounded-md focus-visible:ring-primary bg-muted border-transparent focus:border-border focus:bg-background"
                       />
                     </div>
                   </FormControl>
@@ -225,7 +229,7 @@ export function YoutubeSearch() {
       </Form>
 
       {/* Results Area - Scrollable */}
-      <ScrollArea className="flex-1 px-4 pb-6"> {/* Added padding */}
+      <ScrollArea className="flex-1 px-4 pb-6">
          {isLoadingSearch && renderLoading()}
 
          {!isLoadingSearch && searchResults.length > 0 && (
@@ -233,7 +237,7 @@ export function YoutubeSearch() {
              {searchResults.map((result) => (
                <Card key={result.videoId} className="group overflow-hidden transition-shadow hover:shadow-md border border-transparent hover:border-border bg-card/50 hover:bg-card">
                  <CardContent className="p-0 flex items-center gap-3">
-                   {/* Image Container */}
+                   {/* Image */}
                    <div className="w-20 h-16 sm:w-24 sm:h-[68px] flex-shrink-0 relative bg-muted overflow-hidden rounded-l-md">
                      <Image
                        src={result.thumbnailUrl || '/placeholder-album.svg'}
@@ -244,8 +248,9 @@ export function YoutubeSearch() {
                        data-ai-hint="youtube video thumbnail"
                        unoptimized
                        onError={(e) => {
-                         e.currentTarget.style.display = 'none';
+                         e.currentTarget.style.display = 'none'; // Hide broken image
                          const parent = e.currentTarget.parentElement;
+                         // Add placeholder icon if not already present
                          if (parent && !parent.querySelector('.placeholder-icon')) {
                            const icon = document.createElement('div');
                            icon.className = 'placeholder-icon absolute inset-0 flex items-center justify-center text-muted-foreground bg-muted';
@@ -257,7 +262,9 @@ export function YoutubeSearch() {
                    </div>
                    {/* Text Content */}
                    <div className="flex-1 min-w-0 py-2 pr-2">
+                     {/* Title with line clamping */}
                      <p className="font-medium text-sm leading-snug line-clamp-2 mb-0.5 group-hover:text-primary transition-colors">{result.title}</p>
+                     {/* Author with line clamping */}
                      <p className="text-xs text-muted-foreground line-clamp-1">{result.author}</p>
                    </div>
                    {/* Add Button */}
@@ -268,16 +275,16 @@ export function YoutubeSearch() {
                          className={cn(
                             "h-8 w-8 text-muted-foreground transition-opacity",
                             "hover:bg-accent/50 hover:text-accent-foreground",
-                             isLoadingMetadata === result.videoId && "cursor-not-allowed opacity-50" // Disable when this item is loading
+                             isLoadingMetadata === result.videoId && "cursor-not-allowed opacity-50" // Specific loading state
                          )}
                          onClick={() => handleInitiateAddSong(result)}
                          aria-label={`Add "${result.title}" to playlist`}
-                         disabled={!!isLoadingMetadata} // Disable if any metadata is loading
+                         disabled={!!isLoadingMetadata} // Disable if *any* metadata is loading
                        >
                          {isLoadingMetadata === result.videoId ? (
                              <Loader2 className="h-5 w-5 animate-spin"/>
                          ) : (
-                             <ListPlus className="h-5 w-5" />
+                             <ListPlus className="h-5 w-5" /> // Use ListPlus icon
                          )}
                        </Button>
                    </div>
@@ -289,25 +296,18 @@ export function YoutubeSearch() {
 
          {/* Placeholder or "No results" message */}
          {!isLoadingSearch && !hasSearched && searchResults.length === 0 && renderPlaceholder()}
-         {!isLoadingSearch && hasSearched && searchResults.length === 0 && (
-           <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-2 text-center p-8">
-             <Search className="w-12 h-12 opacity-30" />
-             <p className="text-sm mt-2">No results found.</p>
-             <p className="text-xs text-muted-foreground/80">Try searching for something else.</p>
-           </div>
-         )}
+         {!isLoadingSearch && hasSearched && searchResults.length === 0 && renderNoResults()}
       </ScrollArea>
 
-      {/* Dialog remains the same */}
+      {/* Playlist Selection Dialog */}
       <SelectPlaylistDialog
         isOpen={isSelectPlaylistDialogOpen}
         onOpenChange={(open) => {
           setIsSelectPlaylistDialogOpen(open);
           if (!open) {
-            setSongToAdd(null);
+            setSongToAdd(null); // Clear song if dialog is closed without selection
           }
         }}
-        // Get playlists reactively for the dialog list
         playlists={usePlaylistStore(state => state.playlists)}
         onSelectPlaylist={handlePlaylistSelected}
         songTitle={songToAdd?.title}

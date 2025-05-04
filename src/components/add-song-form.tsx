@@ -22,7 +22,7 @@ import { extractYoutubeVideoId } from '@/services/youtube'; // Helper to get vid
 import type { Song, Playlist, YoutubeVideoMetadata } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { SelectPlaylistDialog } from './select-playlist-dialog';
-import { Plus, Play, Loader2, Youtube, Music, Link as LinkIcon } from 'lucide-react'; // Import necessary icons
+import { Plus, Play, Loader2, Link as LinkIcon } from 'lucide-react'; // Import necessary icons
 
 // Schema for the URL input form
 const addSongSchema = z.object({
@@ -74,9 +74,7 @@ export function AddSongForm({ onSongAdded }: AddSongFormProps) {
 
     try {
       // Use the server action to fetch metadata (requires API key)
-      console.log(`[AddSongForm] Fetching metadata for video ID: ${videoId}`);
       const metadata: YoutubeVideoMetadata = await getYoutubeMetadataAction(videoId);
-      console.log(`[AddSongForm] Metadata received:`, metadata);
       const song: Song = {
         id: videoId,
         title: metadata.title,
@@ -89,25 +87,18 @@ export function AddSongForm({ onSongAdded }: AddSongFormProps) {
       console.error('[AddSongForm] Error fetching metadata via action:', error);
       let description = 'Could not fetch video details.';
        if (error instanceof Error) {
-           description = error.message;
-           if (error.message.includes('Server configuration error: YouTube API key is missing')) {
-               description = 'Configuration Error: YouTube API key is missing or invalid. Please check server setup.';
-               throw new Error(description); // Throw specific error
+           description = error.message; // Use the error message from the action/service
+            if (error.message.includes('Configuration Error: YouTube API key is missing or invalid')) {
+               // No need to re-throw, just use the description
+           } else if (error.message.includes('YouTube API Error:')) {
+               // Already formatted in action
+           } else if (error.message.includes('NetworkError')) {
+               description = 'Failed to fetch YouTube video metadata due to a network issue.';
            }
-           if (error.message.includes('YouTube API Error:')) {
-               // Extract the specific API error message if possible
-               const apiErrorMsg = error.message.replace('YouTube API Error:', '').trim();
-               description = `YouTube API Error: ${apiErrorMsg}`;
-               throw new Error(description); // Throw specific error
-           }
-           if (error.message.includes('NetworkError')) {
-              description = 'Failed to fetch YouTube video metadata due to a network issue.';
-               throw new Error(description);
-           }
+           // No need to throw here, just toast the error
        }
        toast({ title: 'Error', description: description, variant: 'destructive'});
-       throw new Error(`Failed to fetch YouTube video metadata. ${error.message}`); // Rethrow generic for other cases
-
+       return null; // Return null on error instead of throwing
     } finally {
       setIsLoading(false);
     }
@@ -118,72 +109,50 @@ export function AddSongForm({ onSongAdded }: AddSongFormProps) {
 
   // Handler for "Add to Playlist" button
   const onAddToPlaylist = async (values: AddSongFormValues) => {
-    try {
-      const preparedSong = await fetchAndPrepareSong(values.url);
-      if (!preparedSong) return; // Stop if metadata fetch failed or was caught
+    const preparedSong = await fetchAndPrepareSong(values.url);
+    if (!preparedSong) return; // Stop if metadata fetch failed
 
-      setSongToAdd(preparedSong);
+    setSongToAdd(preparedSong);
 
-      // Get the current playlists state directly
-      const currentPlaylists = usePlaylistStore.getState().playlists;
+    // Get the current playlists state directly
+    const currentPlaylists = usePlaylistStore.getState().playlists;
 
-      if (currentPlaylists.length === 0) {
-        // No playlists exist, create a default one
-        console.log("[AddSongForm] No playlists found. Creating default 'My Playlist'.");
-        createPlaylist("My Playlist"); // Call the store action
-        // Get the updated state immediately after creation
-        const updatedPlaylists = usePlaylistStore.getState().playlists;
-        if (updatedPlaylists.length > 0) {
-           const newPlaylistId = updatedPlaylists[0].id;
-           console.log(`[AddSongForm] Adding song to newly created playlist ID: ${newPlaylistId}`);
-           addSongToSpecificPlaylist(newPlaylistId, preparedSong, "My Playlist");
-           form.reset(); // Clear form after successful add
-           onSongAdded?.(); // Call callback if provided
-        } else {
-           console.error("[AddSongForm] Failed to create or find the new default playlist.");
-           toast({ title: "Error", description: "Could not create default playlist.", variant: "destructive" });
-           setSongToAdd(null);
-        }
-
-      } else if (currentPlaylists.length === 1) {
-        // Add directly to the only playlist
-        addSongToSpecificPlaylist(currentPlaylists[0].id, preparedSong, currentPlaylists[0].name);
-        form.reset(); // Clear form after successful add
-        onSongAdded?.(); // Call callback if provided
+    if (currentPlaylists.length === 0) {
+      // No playlists exist, create a default one and add the song
+      const defaultPlaylistName = "My Playlist";
+      createPlaylist(defaultPlaylistName);
+      // Get the updated state immediately after creation
+      const updatedPlaylists = usePlaylistStore.getState().playlists;
+      if (updatedPlaylists.length > 0) {
+         const newPlaylistId = updatedPlaylists[0].id;
+         addSongToSpecificPlaylist(newPlaylistId, preparedSong, defaultPlaylistName);
+         form.reset(); // Clear form after successful add
+         onSongAdded?.(); // Call callback if provided
       } else {
-        // Multiple playlists exist, open dialog to select
-        setIsSelectPlaylistDialogOpen(true);
+         console.error("[AddSongForm] Failed to create or find the new default playlist.");
+         toast({ title: "Error", description: "Could not create default playlist.", variant: "destructive" });
+         setSongToAdd(null);
       }
-    } catch (error: any) {
-       // Catch errors from fetchAndPrepareSong
-       console.error('[AddSongForm] Failed to prepare song:', error);
-       toast({
-         title: 'Error Preparing Song',
-         description: error.message || 'Could not get video details.',
-         variant: 'destructive',
-       });
-       setSongToAdd(null); // Clear song state on error
+
+    } else if (currentPlaylists.length === 1) {
+      // Add directly to the only playlist
+      addSongToSpecificPlaylist(currentPlaylists[0].id, preparedSong, currentPlaylists[0].name);
+      form.reset(); // Clear form after successful add
+      onSongAdded?.(); // Call callback if provided
+    } else {
+      // Multiple playlists exist, open dialog to select
+      setIsSelectPlaylistDialogOpen(true);
     }
   };
 
   // Handler for "Play Now" button
   const onPlayNow = async (values: AddSongFormValues) => {
-    try {
-      const preparedSong = await fetchAndPrepareSong(values.url);
-      if (!preparedSong) return; // Stop if metadata fetch failed
+    const preparedSong = await fetchAndPrepareSong(values.url);
+    if (!preparedSong) return; // Stop if metadata fetch failed
 
-      playSingleSong(preparedSong); // Play the song directly
-      form.reset(); // Clear form after playing
-      onSongAdded?.(); // Call callback if provided
-    } catch (error: any) {
-      // Catch errors from fetchAndPrepareSong
-      console.error('[AddSongForm] Failed to prepare song for Play Now:', error);
-      toast({
-        title: 'Error Preparing Song',
-        description: error.message || 'Could not get video details.',
-        variant: 'destructive',
-      });
-    }
+    playSingleSong(preparedSong); // Play the song directly
+    form.reset(); // Clear form after playing
+    onSongAdded?.(); // Call callback if provided
   };
 
   // --- Playlist Selection Logic ---
@@ -219,10 +188,8 @@ export function AddSongForm({ onSongAdded }: AddSongFormProps) {
 
   return (
     <>
-      {/* Removed the surrounding Card/div - this form is now intended to be placed inside a Dialog */}
       <Form {...form}>
         <form
-          // onSubmit is not used directly on the form tag
           className="flex flex-col sm:flex-row items-start sm:items-center gap-2"
         >
           <FormField
@@ -295,10 +262,9 @@ export function AddSongForm({ onSongAdded }: AddSongFormProps) {
         onOpenChange={(open) => {
           setIsSelectPlaylistDialogOpen(open);
           if (!open) {
-            setSongToAdd(null);
+            setSongToAdd(null); // Clear song if dialog is closed without selection
           }
         }}
-        // Get playlists reactively for the dialog list
         playlists={usePlaylistStore(state => state.playlists)}
         onSelectPlaylist={handlePlaylistSelected}
         songTitle={songToAdd?.title}

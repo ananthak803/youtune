@@ -14,10 +14,8 @@ export async function searchYoutubeAction(query: string): Promise<YoutubeSearchR
     return []; // Return empty if query is empty
   }
   try {
-    console.log(`[Action] Initiating YouTube search for query: "${query.trim()}"`);
     // This requires the API key, handled by the service
     const results = await searchYoutubeVideos(query.trim());
-    console.log(`[Action] YouTube search completed. Found ${results.length} results.`);
     return results;
   } catch (error) {
     console.error('[Action] Error during YouTube search:', error);
@@ -44,22 +42,25 @@ export async function getYoutubeMetadataAction(videoId: string): Promise<Youtube
       throw new Error('Video ID is required.');
   }
   try {
-    console.log(`[Action] Initiating YouTube metadata fetch for video ID: "${videoId}"`);
     // This requires the API key, handled by the service
     const metadata = await getYoutubeVideoMetadata(videoId);
-    console.log(`[Action] YouTube metadata fetch completed for ${videoId}.`);
     return metadata;
   } catch (error) {
     console.error('[Action] Error during YouTube metadata fetch:', error);
     // Provide a more user-friendly error message, hiding internal details
     if (error instanceof Error && error.message.includes('Server configuration error: YouTube API key is missing')) {
-         throw new Error('Metadata fetch unavailable due to server configuration.');
+         // Throw a specific, user-friendly error for client-side handling
+         throw new Error('Configuration Error: YouTube API key is missing or invalid. Please check server setup.');
     }
      if (error instanceof Error && error.message.includes('YouTube API Error')) {
-         throw new Error('Failed to fetch metadata due to an API issue. Please try again later.');
+         // Pass through the specific API error message
+         throw new Error(error.message);
      }
      if (error instanceof Error && error.message.includes(`Video with ID ${videoId} not found`)) {
         throw new Error('Video not found.');
+     }
+     if (error instanceof Error && error.message.includes('Network or unexpected error')) {
+         throw new Error('Failed to fetch YouTube video metadata due to a network issue.');
      }
     // Generic fallback
     throw new Error('Failed to fetch YouTube video metadata. Please try again.');

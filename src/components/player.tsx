@@ -26,17 +26,17 @@ import {
   SheetTitle,
   SheetDescription,
   SheetTrigger,
-} from '@/components/ui/sheet'; // Import Sheet components
-import { QueueView } from '@/components/queue-view'; // Import QueueView
+} from '@/components/ui/sheet';
+import { QueueView } from '@/components/queue-view';
 import {
   usePlaylistStore,
   setPlayerRef,
-  useCurrentSong, // Import the hook for current song
-  useCurrentSongPlaylistContext, // Import the hook for context
-  seekPlayerTo, // Import centralized player control
+  useCurrentSong,
+  useCurrentSongPlaylistContext,
+  seekPlayerTo,
 } from '@/store/playlist-store';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast'; // Import toast
+import { toast } from '@/hooks/use-toast';
 
 // Simple debounce function
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
@@ -53,8 +53,8 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
 
 
 export function Player() {
-  const currentSong = useCurrentSong(); // Use the derived state hook
-  const currentSongPlaylistContextId = useCurrentSongPlaylistContext(); // Use the derived state hook
+  const currentSong = useCurrentSong();
+  const currentSongPlaylistContextId = useCurrentSongPlaylistContext();
 
   const {
     isPlaying,
@@ -75,7 +75,7 @@ export function Player() {
     setVolume,
     isMuted,
     toggleMute,
-    queue, // Get the queue for the queue button indicator
+    queue,
   } = usePlaylistStore((state) => ({
     isPlaying: state.isPlaying,
     isShuffling: state.isShuffling,
@@ -95,7 +95,7 @@ export function Player() {
     setVolume: state.setVolume,
     isMuted: state.isMuted,
     toggleMute: state.toggleMute,
-    queue: state.queue, // Get queue state
+    queue: state.queue,
   }));
 
   const playerRef = useRef<ReactPlayer>(null);
@@ -105,12 +105,12 @@ export function Player() {
   const [hasMounted, setHasMounted] = useState(false);
   const [isQueueSheetOpen, setIsQueueSheetOpen] = useState(false); // State for queue sheet
   const currentSongIdRef = useRef<string | null>(null);
-  const isSeekingRef = useRef(false); // Use ref for immediate access in callbacks
+  const isSeekingRef = useRef(false);
 
   // --- Effects ---
   useEffect(() => {
     setHasMounted(true);
-    setPlayerRef(playerRef); // Set the global player ref
+    setPlayerRef(playerRef);
   }, []);
 
   useEffect(() => {
@@ -123,21 +123,14 @@ export function Player() {
   useEffect(() => {
      const newSongId = currentSong?.id ?? null;
      if (newSongId !== currentSongIdRef.current) {
-         console.log(`[Player Effect] Song changed: ${currentSongIdRef.current} -> ${newSongId}`);
          currentSongIdRef.current = newSongId;
          if (!currentSong) {
-             // setCurrentSongProgress(0); // Let store handle progress reset
-             // setCurrentSongDuration(0); // Let store handle duration reset
              setSeekValue(null);
-             console.log("[Player Effect] No current song, resetting local seek value.");
          } else {
-             // setCurrentSongProgress(0); // Store resets progress on song change
-             // setCurrentSongDuration(0); // Duration will be set by onDuration
              setSeekValue(null);
-             console.log(`[Player Effect] New song "${currentSong.title}" loaded. Local seek value reset.`);
          }
      }
-  }, [currentSong]); // Removed store setters
+  }, [currentSong]);
 
 
  const debouncedSetCurrentSongProgress = useCallback(
@@ -145,7 +138,7 @@ export function Player() {
         if (songId === currentSongIdRef.current && songId !== null && !isSeekingRef.current) {
            setCurrentSongProgress(progress);
         }
-    }, 50),
+    }, 50), // Debounce slightly less aggressively
     [setCurrentSongProgress]
  );
 
@@ -176,21 +169,19 @@ export function Player() {
     (duration: number) => {
        if (hasMounted && currentSongIdRef.current) {
            const validDuration = duration > 0 ? duration : 0;
-           console.log(`[Player HandleDuration] Received duration: ${duration}, Setting: ${validDuration}`);
            setCurrentSongDuration(validDuration);
+           // Reset progress if duration is very short or zero, potentially indicating a load issue or end of stream
            if (validDuration < 1 && currentSongProgress > 0) {
-               console.log("[Player HandleDuration] Short/Zero duration received, resetting progress.");
-               seekPlayerTo(0); // Use central seek function
+               seekPlayerTo(0);
            }
        }
     },
-    [setCurrentSongDuration, hasMounted, currentSongProgress] // Removed setCurrentSongProgress
+    [setCurrentSongDuration, hasMounted, currentSongProgress]
   );
 
     const handleEnded = useCallback(() => {
-        console.log("[Player HandleEnded] Song ended.");
         if (hasMounted) {
-             // Use the store's logic which handles looping etc.
+             // Store handles looping logic
              playNextSong();
         }
     }, [playNextSong, hasMounted]);
@@ -199,21 +190,21 @@ export function Player() {
  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!currentSong) return;
     const target = event.target as HTMLElement;
+    // Check if the click is on the slider thumb or track directly
     if (target.closest('[role="slider"]')) {
-        console.log("[Player Seek] Pointer Down on Slider");
         isSeekingRef.current = true;
         setSeeking(true);
+        // Immediately set the visual seek value based on click position if needed
+        // For now, we rely on onValueChange to update seekValue during drag
         setSeekValue(currentSongProgress);
-        document.body.style.userSelect = 'none';
-    } else {
-         console.log("[Player Seek] Pointer Down outside slider thumb/track, ignoring.");
+        document.body.style.userSelect = 'none'; // Prevent text selection during drag
     }
  };
 
 
  const handleValueChange = (value: number[]) => {
     if (!currentSong || !hasMounted || !isSeekingRef.current) return;
-    console.log(`[Player Seek] Value Change (Dragging): ${value[0]}`);
+    // Update the visual representation of the slider during drag
     setSeekValue(value[0]);
  };
 
@@ -221,41 +212,34 @@ export function Player() {
  const handleValueCommit = (value: number[]) => {
    if (!currentSong || !hasMounted || !isSeekingRef.current) return;
    const finalSeekTime = value[0];
-   console.log(`[Player Seek] Value Commit (Pointer Up). Seeking to: ${finalSeekTime}`);
 
    // Use centralized function to seek and update store
    seekPlayerTo(finalSeekTime, 'seconds');
 
+   // Delay resetting seeking state slightly to allow player to potentially catch up
    setTimeout(() => {
        isSeekingRef.current = false;
        setSeeking(false);
        setSeekValue(null);
-       console.log("[Player Seek] Finished seek, reset seeking state.");
-       document.body.style.userSelect = '';
-   }, 50);
+       document.body.style.userSelect = ''; // Re-enable text selection
+   }, 100); // Increased delay slightly
  };
 
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
     setLocalVolume(newVolume);
-    setVolume(newVolume);
-    if (isMuted && newVolume > 0) {
-        toggleMute();
-    }
-    if (!isMuted && newVolume === 0) {
-        toggleMute();
-    }
+    setVolume(newVolume); // This updates the store, which handles mute logic
   };
 
    const handleLoopToggle = () => {
        if (!isLooping && !isLoopingPlaylist) {
-           toggleLoopPlaylist();
+           toggleLoopPlaylist(); // Off -> Playlist Loop
        } else if (isLoopingPlaylist) {
            toggleLoopPlaylist();
-           toggleLoop();
+           toggleLoop(); // Playlist Loop -> Song Loop
        } else {
-           toggleLoop();
+           toggleLoop(); // Song Loop -> Off
        }
    };
 
@@ -283,12 +267,14 @@ export function Player() {
   const disablePlaylistControls = !currentSong || isInSinglePlayMode;
   const disableLoopSongControl = !currentSong;
 
+  // Use seekValue if dragging, otherwise use currentSongProgress from store
   const displayProgress = currentSong ? (seekValue !== null ? seekValue : currentSongProgress) : 0;
   const displayDuration = currentSong ? currentSongDuration : 0;
 
 
   return (
-    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-4 sticky bottom-0 z-50 select-none"> {/* Added select-none */}
+    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-4 sticky bottom-0 z-50 select-none">
+      {/* ReactPlayer hidden */}
       {hasMounted && currentSong?.url && (
         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
             <ReactPlayer
@@ -296,20 +282,20 @@ export function Player() {
                 url={currentSong.url}
                 playing={isPlaying}
                 volume={isMuted ? 0 : localVolume}
-                loop={isLooping} // Only handle single song loop here
+                loop={isLooping} // Single song loop handled directly by player
                 onProgress={handleProgress}
                 onDuration={handleDuration}
-                onEnded={handleEnded} // Store logic now handles playlist looping/stopping
+                onEnded={handleEnded}
                 width="1px"
                 height="1px"
                 controls={false}
                 config={{
                     youtube: { playerVars: { playsinline: 1, controls: 0 } },
                 }}
-                onError={(e, data, hlsInstance?, hlsGlobal?) => {
+                onError={(e, data) => {
                     console.error("[ReactPlayer Error]", e, data);
                     toast({ title: "Playback Error", description: "Could not play the selected video. Skipping...", variant: "destructive" });
-                    playNextSong();
+                    playNextSong(); // Attempt to play the next song on error
                 }}
             />
         </div>
@@ -326,8 +312,8 @@ export function Player() {
                 height={56}
                 className="rounded-md flex-shrink-0 aspect-square object-cover"
                 data-ai-hint="music album cover"
-                unoptimized
-                onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
+                unoptimized // Avoids optimization issues with external URLs
+                onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }} // Fallback placeholder
               />
               <div className="overflow-hidden">
                 <p className="font-semibold truncate text-sm leading-tight">{currentSong.title || 'Unknown Title'}</p>
@@ -401,7 +387,7 @@ export function Player() {
                     (isLooping || (isLoopingPlaylist && !disablePlaylistControls)) && 'text-accent'
                  )}
                 disabled={disableLoopSongControl}
-                aria-label={isLooping ? 'Disable loop' : isLoopingPlaylist ? 'Enable song loop' : 'Enable playlist loop'}
+                aria-label={isLooping ? 'Disable song loop' : isLoopingPlaylist ? 'Enable song loop' : 'Enable playlist loop'}
              >
                 {getLoopIcon()}
              </Button>
@@ -410,17 +396,20 @@ export function Player() {
              <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
                {formatTime(displayProgress)}
              </span>
-             <Slider
-               value={[displayProgress]}
-               max={Math.max(displayDuration, 1)}
-               step={0.1}
-               className={cn("flex-1", !currentSong && "opacity-50")}
-               onValueChange={handleValueChange}
-               onValueCommit={handleValueCommit}
-               onPointerDown={handlePointerDown}
-               disabled={!currentSong || !currentSongDuration}
-               aria-label="Song progress"
-             />
+             {/* Wrap Slider to handle pointer events */}
+             <div className="flex-1" onPointerDownCapture={handlePointerDown}>
+                 <Slider
+                   value={[displayProgress]}
+                   max={Math.max(displayDuration, 1)} // Ensure max is at least 1 to prevent errors
+                   step={0.1} // Smaller step for smoother seeking
+                   className={cn("w-full", !currentSong && "opacity-50")}
+                   onValueChange={handleValueChange} // Update visual state during drag
+                   onValueCommit={handleValueCommit} // Update actual player on release
+                   // onPointerDown is now handled by the wrapper div
+                   disabled={!currentSong || !currentSongDuration}
+                   aria-label="Song progress"
+                 />
+             </div>
              <span className="text-xs text-muted-foreground w-10 text-left tabular-nums">
                {formatTime(displayDuration)}
              </span>
@@ -429,15 +418,15 @@ export function Player() {
 
         {/* Volume & Queue Controls */}
         <div className="flex items-center justify-end gap-3 w-1/4 lg:w-1/3">
+            {/* Queue Button */}
             <Sheet open={isQueueSheetOpen} onOpenChange={setIsQueueSheetOpen}>
               <SheetTrigger asChild>
                 <Button
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "h-8 w-8",
-                      queue.length > 0 ? "text-accent" : "text-muted-foreground", // Highlight if queue has items
-                      "hover:text-foreground transition-colors" // Standard hover effect
+                      "h-8 w-8 text-muted-foreground hover:text-foreground transition-colors",
+                      queue.length > 0 && "text-accent" // Highlight if queue has items
                     )}
                     aria-label="Show queue"
                   >
@@ -455,24 +444,25 @@ export function Player() {
                </SheetContent>
             </Sheet>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMute}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-            aria-label={isMuted ? 'Unmute' : 'Mute'}
-          >
-            {getVolumeIcon()}
-          </Button>
-          <div className="w-24">
-            <Slider
-              value={[isMuted ? 0 : localVolume]}
-              max={1}
-              step={0.01}
-              className="w-full"
-              onValueChange={handleVolumeChange}
-              aria-label="Volume"
-            />
+            {/* Volume Controls */}
+          <div className="flex items-center gap-2 w-28">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleMute}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                aria-label={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {getVolumeIcon()}
+              </Button>
+              <Slider
+                value={[isMuted ? 0 : localVolume]}
+                max={1}
+                step={0.01}
+                className="w-full"
+                onValueChange={handleVolumeChange}
+                aria-label="Volume"
+              />
           </div>
         </div>
       </div>
