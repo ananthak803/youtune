@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -12,7 +13,7 @@ const Slider = React.forwardRef<
   <SliderPrimitive.Root
     ref={ref}
     className={cn(
-      "relative flex w-full touch-none select-none items-center",
+      "relative flex w-full touch-none select-none items-center", // Added select-none here
       className
     )}
     {...props}
