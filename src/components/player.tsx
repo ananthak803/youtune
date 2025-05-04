@@ -104,6 +104,7 @@ export function Player() {
   const [hasMounted, setHasMounted] = useState(false);
   const [isQueueSheetOpen, setIsQueueSheetOpen] = useState(false); // State for queue sheet
   const currentSongIdRef = useRef<string | null>(null);
+  const isSeekingRef = useRef(false); // Use ref for immediate access in callbacks
 
   // --- Effects ---
   useEffect(() => {
@@ -113,10 +114,10 @@ export function Player() {
 
   useEffect(() => {
     // Update local volume only if not seeking and the store volume changes
-    if (!seeking && volume !== localVolume) {
+    if (!isSeekingRef.current && volume !== localVolume) {
        setLocalVolume(volume);
     }
-  }, [volume, seeking, localVolume]); // Added localVolume dependency
+  }, [volume, localVolume]); // Removed seeking state dependency, relying on ref
 
 
   useEffect(() => {
@@ -127,11 +128,13 @@ export function Player() {
          if (!currentSong) {
              setCurrentSongProgress(0);
              setCurrentSongDuration(0);
+             setSeekValue(null); // Reset local seek value on song change
              console.log("[Player Effect] No current song, resetting progress and duration.");
          } else {
              // Optionally reset progress here if needed, though store might handle it
              setCurrentSongProgress(0); // Reset progress for new song
              setCurrentSongDuration(0); // Reset duration, wait for onDuration
+             setSeekValue(null); // Reset local seek value on song change
              console.log(`[Player Effect] New song "${currentSong.title}" loaded. Progress/Duration reset.`);
          }
      }
@@ -142,31 +145,39 @@ export function Player() {
 
  const debouncedSetCurrentSongProgress = useCallback(
     debounce((progress: number, songId: string | null) => {
-        if (songId === currentSongIdRef.current && songId !== null && !seeking) { // Added !seeking check here too
+        // Check ref instead of state for immediate value inside debounce
+        if (songId === currentSongIdRef.current && songId !== null && !isSeekingRef.current) {
            setCurrentSongProgress(progress);
         } else {
-           // console.log(`[Player Debounced Progress] Skipped update. Seeking: ${seeking}, Current song ref: ${currentSongIdRef.current}, Progress song ID: ${songId}`);
+           // console.log(`[Player Debounced Progress] Skipped update. Seeking: ${isSeekingRef.current}, Current song ref: ${currentSongIdRef.current}, Progress song ID: ${songId}`);
         }
-    }, 50), // Reduced debounce time
-    [setCurrentSongProgress, seeking] // Added seeking dependency
+    }, 50),
+    [setCurrentSongProgress] // Removed seeking dependency, relying on ref
  );
 
 
  const handleProgress = useCallback(
     (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number; }) => {
-        // Only update global progress if NOT seeking
-        if (!seeking && hasMounted && currentSongIdRef.current) {
+        // Only update global progress if NOT seeking (use ref for immediate check)
+        if (!isSeekingRef.current && hasMounted && currentSongIdRef.current) {
             const duration = currentSongDuration || 0;
              // Allow slight overshoot for progress updates, clamp value sent to store
              if (duration > 0 && state.playedSeconds >= 0) {
                 const clampedProgress = Math.min(state.playedSeconds, duration);
-                debouncedSetCurrentSongProgress(clampedProgress, currentSongIdRef.current);
+                // Update local seek value *only if not seeking* to keep slider synced
+                 if (!isSeekingRef.current) {
+                     setSeekValue(null); // Clear seek value if update comes from player
+                     debouncedSetCurrentSongProgress(clampedProgress, currentSongIdRef.current);
+                 }
              } else if (duration === 0 && state.playedSeconds === 0) {
-                debouncedSetCurrentSongProgress(0, currentSongIdRef.current);
+                if (!isSeekingRef.current) {
+                    setSeekValue(null);
+                    debouncedSetCurrentSongProgress(0, currentSongIdRef.current);
+                }
              }
         }
     },
-    [seeking, hasMounted, currentSongDuration, debouncedSetCurrentSongProgress]
+    [hasMounted, currentSongDuration, debouncedSetCurrentSongProgress] // Removed seeking state dependency
 );
 
 
@@ -180,6 +191,7 @@ export function Player() {
            if (validDuration < 1 && currentSongProgress > 0) {
                console.log("[Player HandleDuration] Short/Zero duration received, resetting progress.");
                setCurrentSongProgress(0);
+               setSeekValue(0); // Reset local seek value as well
            }
        }
     },
@@ -198,7 +210,8 @@ export function Player() {
   const handleSeekMouseDown = (e: React.PointerEvent<HTMLDivElement>) => {
      if (!currentSong) return;
      console.log("[Player Seek] Pointer Down");
-     setSeeking(true);
+     isSeekingRef.current = true; // Use ref for immediate update
+     setSeeking(true); // Update state for UI changes if needed
      // Initialize local seek value with current progress
      setSeekValue(currentSongProgress);
      // Prevent text selection during drag
@@ -207,27 +220,30 @@ export function Player() {
 
   // Update local seek value while dragging
   const handleSeekChange = (value: number[]) => {
-     if (!currentSong || !hasMounted || !seeking) return;
+     if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Use ref
      setSeekValue(value[0]);
   };
 
   // Finalize seek on pointer up (replaces mouse up)
   const handleSeekPointerUp = (value: number[]) => {
-    if (!currentSong || !hasMounted || !seeking) return; // Ensure we are actually seeking
+    if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Use ref
     const finalSeekTime = value[0];
     console.log(`[Player Seek] Pointer Up. Seeking to: ${finalSeekTime}`);
 
     // Seek the actual player
     if (playerRef.current) {
-        playerRef.current.seekTo(finalSeekTime);
+        playerRef.current.seekTo(finalSeekTime, 'seconds'); // Specify 'seconds'
     }
 
     // Update the global progress state *immediately*
     setCurrentSongProgress(finalSeekTime);
 
     // Reset seeking state *immediately*
-    setSeeking(false);
-    setSeekValue(null); // Clear local seek value
+    isSeekingRef.current = false; // Use ref
+    setSeeking(false); // Update state
+    setSeekValue(null); // Clear local seek value after a short delay to allow UI to catch up
+    setTimeout(() => setSeekValue(null), 50); // Clear local seek value
+
     console.log("[Player Seek] Finished seek, reset seeking state.");
     // Re-enable text selection
     document.body.style.userSelect = '';
@@ -450,8 +466,9 @@ export function Player() {
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "h-8 w-8 text-muted-foreground hover:text-foreground transition-colors",
-                      queue.length > 0 && "text-accent" // Highlight if queue has items
+                      "h-8 w-8",
+                      queue.length > 0 ? "text-accent" : "text-muted-foreground", // Use accent color when queue has items
+                      "hover:text-foreground transition-colors" // Standard hover effect
                     )}
                     aria-label="Show queue"
                   >
@@ -495,4 +512,3 @@ export function Player() {
     </footer>
   );
 }
-
