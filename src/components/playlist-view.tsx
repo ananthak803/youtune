@@ -24,7 +24,7 @@ interface PlaylistViewProps {
 
 export function PlaylistView({ playlist }: PlaylistViewProps) {
   const {
-    playSongInPlaylistContext, // Corrected function name
+    playSongInPlaylistContext,
     removeSongFromPlaylist,
     isPlaying,
     reorderSongInPlaylist,
@@ -34,7 +34,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
     isShuffling,
     togglePlayPause, // Get toggle function
   } = usePlaylistStore((state) => ({
-    playSongInPlaylistContext: state.playSongInPlaylistContext, // Corrected selector
+    playSongInPlaylistContext: state.playSongInPlaylistContext,
     removeSongFromPlaylist: state.removeSongFromPlaylist,
     isPlaying: state.isPlaying,
     reorderSongInPlaylist: state.reorderSongInPlaylist,
@@ -130,7 +130,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
   const isCurrentlyPlayingPlaylist = currentSongPlaylistContextId === playlist.id;
 
 
-  return ( // Ensure this return statement wraps the main JSX
+  return (
     <div className="mt-8">
       <div className="flex items-center gap-4 mb-6 select-none"> {/* Added select-none */}
           <h2 className="text-3xl font-bold">{playlist.name}</h2>
@@ -156,13 +156,13 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
       ) : (
         <Table>
           <TableHeader>
-            <TableRow className="select-none"> {/* Added select-none */}
+            <TableRow className="select-none">{/* Ensure no spaces */}
               <TableHead className="w-10"></TableHead>{/* Drag Handle */}
               <TableHead className="w-16"></TableHead>{/* Play/Pause Button */}
               <TableHead>Title</TableHead>
               <TableHead>Artist</TableHead>
               <TableHead className="w-16 text-right"></TableHead>{/* Remove Button */}
-            </TableRow>
+            </TableRow>{/* Ensure no spaces */}
           </TableHeader>
           <TableBody
             onDragOver={handleDragOver}
