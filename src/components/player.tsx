@@ -137,29 +137,22 @@ export function Player() {
      }
   }, [currentSong, setCurrentSongProgress, setCurrentSongDuration]);
 
-  // Effect to handle seeking when currentSongProgress is reset to 0 by playPreviousSong (restart)
-  // Also handles external progress resets while playing
-  useEffect(() => {
-      if (currentSong && currentSongProgress === 0 && isPlaying && playerRef.current && !seeking) {
-          // If progress is 0, song exists, isPlaying, and we're not manually seeking,
-          // it might be due to a restart action or external reset. Ensure player seeks.
-          console.log("[Player Effect] Progress reset detected while playing. Seeking player to 0.");
-          playerRef.current.seekTo(0);
-      }
-  }, [currentSongProgress, currentSong, isPlaying, seeking]);
+  // Removed the useEffect that forced playerRef.current.seekTo(0)
+  // when currentSongProgress becomes 0 while playing. This might conflict
+  // with manual seeking and is generally handled by the player reacting to state.
 
 
  // --- Handlers ---
 
  const debouncedSetCurrentSongProgress = useCallback(
     debounce((progress: number, songId: string | null) => {
-        if (songId === currentSongIdRef.current && songId !== null) {
+        if (songId === currentSongIdRef.current && songId !== null && !seeking) { // Added !seeking check here too
            setCurrentSongProgress(progress);
         } else {
-           // console.log(`[Player Debounced Progress] Skipped update. Current song ref: ${currentSongIdRef.current}, Progress song ID: ${songId}`);
+           // console.log(`[Player Debounced Progress] Skipped update. Seeking: ${seeking}, Current song ref: ${currentSongIdRef.current}, Progress song ID: ${songId}`);
         }
     }, 50), // Reduced debounce time
-    [setCurrentSongProgress]
+    [setCurrentSongProgress, seeking] // Added seeking dependency
  );
 
 
@@ -230,15 +223,14 @@ export function Player() {
     if (playerRef.current) {
         playerRef.current.seekTo(finalSeekTime);
     }
-    // Update the global progress state
+
+    // Update the global progress state *immediately*
     setCurrentSongProgress(finalSeekTime);
 
-    // Reset seeking state AFTER a short delay to prevent immediate re-triggering of progress updates
-     setTimeout(() => {
-        setSeeking(false);
-        setSeekValue(null); // Clear local seek value
-        console.log("[Player Seek] Finished seek, reset seeking state.");
-     }, 50); // Short delay
+    // Reset seeking state *immediately*
+    setSeeking(false);
+    setSeekValue(null); // Clear local seek value
+    console.log("[Player Seek] Finished seek, reset seeking state.");
   };
 
 
