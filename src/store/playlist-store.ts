@@ -1,8 +1,8 @@
-
+// src/store/playlist-store.ts
 'use client';
 
 import { create } from 'zustand';
-import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Playlist, Song, QueueSong } from '@/lib/types';
 import type ReactPlayer from 'react-player'; // Import type for playerRef
 import { toast } from '@/hooks/use-toast'; // Correct import for toast
@@ -20,11 +20,6 @@ interface PlaylistState {
   currentSongProgress: number;
   currentSongDuration: number;
   isPlaying: boolean; // Reflects player state
-
-  // --- Derived state (no need to store directly, can be computed) ---
-  // currentSong: Song | null; // Can be derived from queue[currentQueueIndex]
-  // currentSongPlaylistContextId: string | null; // Now part of QueueSong
-  // isInSinglePlayMode: boolean; // Inferred if queue has only 1 song and context is null? Less clear. Replaced by queue logic.
 
   // Actions
   createPlaylist: (name: string) => void;
@@ -109,7 +104,7 @@ export const usePlaylistStore = create<PlaylistState>()(
           return newStateUpdate;
         }),
 
-      deletePlaylist: (playlistId) =>
+     deletePlaylist: (playlistId) =>
         set((state) => {
           console.log('[Store] deletePlaylist triggered for ID:', playlistId);
           const updatedPlaylists = state.playlists.filter((p) => p.id !== playlistId);
@@ -417,11 +412,13 @@ export const usePlaylistStore = create<PlaylistState>()(
          const playlist = get().playlists.find(p => p.id === playlistId);
          if (!playlist) {
               console.error(`[Store] Playlist ${playlistId} not found for playing song context.`);
+              toast({ title: "Error", description: "Playlist not found.", variant: "destructive" });
               return;
           }
          const songIndex = playlist.songs.findIndex(s => s.id === song.id);
          if (songIndex === -1) {
              console.error(`[Store] Song ${song.id} not found within playlist ${playlistId}.`);
+              toast({ title: "Error", description: "Song not found in this playlist.", variant: "destructive" });
              return;
          }
           console.log(`[Store] Found song ${song.id} at index ${songIndex} in playlist ${playlistId}. Delegating to playPlaylist.`);
@@ -463,7 +460,7 @@ export const usePlaylistStore = create<PlaylistState>()(
         // 1. Handle single song loop
         if (isLooping && currentSong) {
             console.log("[Store] Looping current song.");
-            if (playerRef.current) playerRef.current.seekTo(0);
+            // Rely on Player component effect for seekTo(0)
              return { currentSongProgress: 0, isPlaying: true };
         }
 
@@ -544,9 +541,9 @@ export const usePlaylistStore = create<PlaylistState>()(
         }
 
         // 1. Restart current song if progress > 3 seconds
-        if (currentSongProgress > 3 && playerRef.current) {
+        if (currentSongProgress > 3) {
              console.log("[Store] Restarting current song.");
-             playerRef.current.seekTo(0);
+             // Rely on Player component effect for seekTo(0)
              return { currentSongProgress: 0, isPlaying: true };
         }
 
@@ -561,7 +558,7 @@ export const usePlaylistStore = create<PlaylistState>()(
                 prevIndex = queue.length - 1; // Loop to the end
             } else {
                  console.log("[Store] Looping playlist is OFF. Restarting first song.");
-                 if (playerRef.current) playerRef.current.seekTo(0);
+                 // Rely on Player component effect for seekTo(0)
                  return { currentSongProgress: 0, isPlaying: true };
             }
         }
