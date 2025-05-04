@@ -33,6 +33,7 @@ import {
   setPlayerRef,
   useCurrentSong, // Import the hook for current song
   useCurrentSongPlaylistContext, // Import the hook for context
+  seekPlayerTo, // Import centralized player control
 } from '@/store/playlist-store';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast'; // Import toast
@@ -113,11 +114,10 @@ export function Player() {
   }, []);
 
   useEffect(() => {
-    // Update local volume only if not seeking and the store volume changes
     if (!isSeekingRef.current && volume !== localVolume) {
        setLocalVolume(volume);
     }
-  }, [volume, localVolume]); // Removed seeking state dependency, relying on ref
+  }, [volume, localVolume]);
 
 
   useEffect(() => {
@@ -126,47 +126,38 @@ export function Player() {
          console.log(`[Player Effect] Song changed: ${currentSongIdRef.current} -> ${newSongId}`);
          currentSongIdRef.current = newSongId;
          if (!currentSong) {
-             setCurrentSongProgress(0);
-             setCurrentSongDuration(0);
-             setSeekValue(null); // Reset local seek value on song change
-             console.log("[Player Effect] No current song, resetting progress and duration.");
+             // setCurrentSongProgress(0); // Let store handle progress reset
+             // setCurrentSongDuration(0); // Let store handle duration reset
+             setSeekValue(null);
+             console.log("[Player Effect] No current song, resetting local seek value.");
          } else {
-             // Optionally reset progress here if needed, though store might handle it
-             setCurrentSongProgress(0); // Reset progress for new song
-             setCurrentSongDuration(0); // Reset duration, wait for onDuration
-             setSeekValue(null); // Reset local seek value on song change
-             console.log(`[Player Effect] New song "${currentSong.title}" loaded. Progress/Duration reset.`);
+             // setCurrentSongProgress(0); // Store resets progress on song change
+             // setCurrentSongDuration(0); // Duration will be set by onDuration
+             setSeekValue(null);
+             console.log(`[Player Effect] New song "${currentSong.title}" loaded. Local seek value reset.`);
          }
      }
-  }, [currentSong, setCurrentSongProgress, setCurrentSongDuration]);
+  }, [currentSong]); // Removed store setters
 
-
- // --- Handlers ---
 
  const debouncedSetCurrentSongProgress = useCallback(
     debounce((progress: number, songId: string | null) => {
-        // Check ref instead of state for immediate value inside debounce
         if (songId === currentSongIdRef.current && songId !== null && !isSeekingRef.current) {
            setCurrentSongProgress(progress);
-        } else {
-           // console.log(`[Player Debounced Progress] Skipped update. Seeking: ${isSeekingRef.current}, Current song ref: ${currentSongIdRef.current}, Progress song ID: ${songId}`);
         }
     }, 50),
-    [setCurrentSongProgress] // Removed seeking dependency, relying on ref
+    [setCurrentSongProgress]
  );
 
 
  const handleProgress = useCallback(
     (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number; }) => {
-        // Only update global progress if NOT seeking (use ref for immediate check)
         if (!isSeekingRef.current && hasMounted && currentSongIdRef.current) {
             const duration = currentSongDuration || 0;
-             // Allow slight overshoot for progress updates, clamp value sent to store
              if (duration > 0 && state.playedSeconds >= 0) {
                 const clampedProgress = Math.min(state.playedSeconds, duration);
-                // Update local seek value *only if not seeking* to keep slider synced
                  if (!isSeekingRef.current) {
-                     setSeekValue(null); // Clear seek value if update comes from player
+                     setSeekValue(null);
                      debouncedSetCurrentSongProgress(clampedProgress, currentSongIdRef.current);
                  }
              } else if (duration === 0 && state.playedSeconds === 0) {
@@ -177,7 +168,7 @@ export function Player() {
              }
         }
     },
-    [hasMounted, currentSongDuration, debouncedSetCurrentSongProgress] // Removed seeking state dependency
+    [hasMounted, currentSongDuration, debouncedSetCurrentSongProgress]
 );
 
 
@@ -187,37 +178,32 @@ export function Player() {
            const validDuration = duration > 0 ? duration : 0;
            console.log(`[Player HandleDuration] Received duration: ${duration}, Setting: ${validDuration}`);
            setCurrentSongDuration(validDuration);
-           // If duration is very small or zero, and progress is already non-zero, reset progress.
            if (validDuration < 1 && currentSongProgress > 0) {
                console.log("[Player HandleDuration] Short/Zero duration received, resetting progress.");
-               setCurrentSongProgress(0);
-               setSeekValue(0); // Reset local seek value as well
+               seekPlayerTo(0); // Use central seek function
            }
        }
     },
-    [setCurrentSongDuration, hasMounted, currentSongProgress, setCurrentSongProgress] // Added progress dependencies
+    [setCurrentSongDuration, hasMounted, currentSongProgress] // Removed setCurrentSongProgress
   );
 
     const handleEnded = useCallback(() => {
         console.log("[Player HandleEnded] Song ended.");
         if (hasMounted) {
+             // Use the store's logic which handles looping etc.
              playNextSong();
         }
     }, [playNextSong, hasMounted]);
 
 
- // Called when user starts dragging the slider thumb
  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!currentSong) return;
-    // Only trigger seek if the event target is the slider thumb or track itself
     const target = event.target as HTMLElement;
     if (target.closest('[role="slider"]')) {
         console.log("[Player Seek] Pointer Down on Slider");
-        isSeekingRef.current = true; // Use ref for immediate update
-        setSeeking(true); // Update state for UI changes if needed
-        // Initialize local seek value with current progress
+        isSeekingRef.current = true;
+        setSeeking(true);
         setSeekValue(currentSongProgress);
-        // Prevent text selection during drag
         document.body.style.userSelect = 'none';
     } else {
          console.log("[Player Seek] Pointer Down outside slider thumb/track, ignoring.");
@@ -225,75 +211,60 @@ export function Player() {
  };
 
 
- // Update local seek value while dragging
  const handleValueChange = (value: number[]) => {
-    if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Use ref
+    if (!currentSong || !hasMounted || !isSeekingRef.current) return;
     console.log(`[Player Seek] Value Change (Dragging): ${value[0]}`);
     setSeekValue(value[0]);
  };
 
 
- // Finalize seek on value commit (usually pointer up)
  const handleValueCommit = (value: number[]) => {
-   if (!currentSong || !hasMounted || !isSeekingRef.current) return; // Check ref
+   if (!currentSong || !hasMounted || !isSeekingRef.current) return;
    const finalSeekTime = value[0];
    console.log(`[Player Seek] Value Commit (Pointer Up). Seeking to: ${finalSeekTime}`);
 
-   // Seek the actual player
-   if (playerRef.current) {
-     playerRef.current.seekTo(finalSeekTime, 'seconds');
-   }
+   // Use centralized function to seek and update store
+   seekPlayerTo(finalSeekTime, 'seconds');
 
-   // Update the global progress state *immediately*
-   setCurrentSongProgress(finalSeekTime);
-
-   // Reset seeking state *immediately* after a very short delay
-   // This delay helps prevent the handleProgress callback triggered by seekTo
-   // from ignoring the update due to the seeking ref still being true.
    setTimeout(() => {
        isSeekingRef.current = false;
-       setSeeking(false); // Update state
-       setSeekValue(null); // Clear local seek value
+       setSeeking(false);
+       setSeekValue(null);
        console.log("[Player Seek] Finished seek, reset seeking state.");
-       // Re-enable text selection
        document.body.style.userSelect = '';
-   }, 50); // 50ms delay seems reasonable
+   }, 50);
  };
 
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
-    setLocalVolume(newVolume); // Update local state for immediate UI feedback
-    setVolume(newVolume); // Update global state via action (might be debounced if needed)
-    // If user drags volume > 0 while muted, unmute
+    setLocalVolume(newVolume);
+    setVolume(newVolume);
     if (isMuted && newVolume > 0) {
         toggleMute();
     }
-    // If user drags volume to 0, mute
     if (!isMuted && newVolume === 0) {
         toggleMute();
     }
   };
 
-   // --- Loop Logic ---
    const handleLoopToggle = () => {
        if (!isLooping && !isLoopingPlaylist) {
-           toggleLoopPlaylist(); // Off -> Playlist Loop
+           toggleLoopPlaylist();
        } else if (isLoopingPlaylist) {
-           toggleLoopPlaylist(); // Playlist Loop -> Song Loop
+           toggleLoopPlaylist();
            toggleLoop();
        } else {
-           toggleLoop(); // Song Loop -> Off
+           toggleLoop();
        }
    };
 
    const getLoopIcon = () => {
-       if (isLooping) return <Repeat1 className="h-4 w-4 text-accent" />; // Highlight single loop when active
-       if (isLoopingPlaylist) return <Repeat className="h-4 w-4 text-accent" />; // Highlight playlist loop when active
-       return <Repeat className="h-4 w-4" />; // Default loop icon (off state)
+       if (isLooping) return <Repeat1 className="h-4 w-4 text-accent" />;
+       if (isLoopingPlaylist) return <Repeat className="h-4 w-4 text-accent" />;
+       return <Repeat className="h-4 w-4" />;
    };
 
-  // --- UI Helpers ---
   const formatTime = (seconds: number): string => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
     const date = new Date(seconds * 1000);
@@ -308,20 +279,16 @@ export function Player() {
     return <Volume2 className="h-5 w-5" />;
   };
 
-  // Determine if playlist controls (Shuffle, Playlist Loop) should be disabled
   const isInSinglePlayMode = !currentSongPlaylistContextId;
   const disablePlaylistControls = !currentSong || isInSinglePlayMode;
-  // Loop Song button is disabled only if there's no song
   const disableLoopSongControl = !currentSong;
 
-  // Use local state for display values to avoid flickering during seeking
-  const displayProgress = currentSong ? (seekValue !== null ? seekValue : currentSongProgress) : 0; // Show seekValue during drag
+  const displayProgress = currentSong ? (seekValue !== null ? seekValue : currentSongProgress) : 0;
   const displayDuration = currentSong ? currentSongDuration : 0;
 
 
   return (
-    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-4 sticky bottom-0 z-50">
-      {/* Conditional ReactPlayer mount */}
+    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-4 sticky bottom-0 z-50 select-none"> {/* Added select-none */}
       {hasMounted && currentSong?.url && (
         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
             <ReactPlayer
@@ -329,20 +296,19 @@ export function Player() {
                 url={currentSong.url}
                 playing={isPlaying}
                 volume={isMuted ? 0 : localVolume}
-                loop={isLooping} // Single song loop is handled directly by ReactPlayer
+                loop={isLooping} // Only handle single song loop here
                 onProgress={handleProgress}
                 onDuration={handleDuration}
-                onEnded={handleEnded}
+                onEnded={handleEnded} // Store logic now handles playlist looping/stopping
                 width="1px"
                 height="1px"
-                controls={false} // Ensure native controls are off
+                controls={false}
                 config={{
-                    youtube: { playerVars: { playsinline: 1, controls: 0 } }, // Ensure YouTube controls are off
+                    youtube: { playerVars: { playsinline: 1, controls: 0 } },
                 }}
                 onError={(e, data, hlsInstance?, hlsGlobal?) => {
                     console.error("[ReactPlayer Error]", e, data);
                     toast({ title: "Playback Error", description: "Could not play the selected video. Skipping...", variant: "destructive" });
-                    // Skip to the next song on error
                     playNextSong();
                 }}
             />
@@ -350,7 +316,7 @@ export function Player() {
       )}
       <div className="flex items-center justify-between gap-4">
         {/* Song Info */}
-        <div className="flex items-center gap-3 w-1/4 lg:w-1/3 min-w-0 select-none"> {/* Added select-none */}
+        <div className="flex items-center gap-3 w-1/4 lg:w-1/3 min-w-0">
           {currentSong ? (
             <>
               <Image
@@ -360,7 +326,7 @@ export function Player() {
                 height={56}
                 className="rounded-md flex-shrink-0 aspect-square object-cover"
                 data-ai-hint="music album cover"
-                unoptimized // Added for ytimg URLs if not in next.config.js
+                unoptimized
                 onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
               />
               <div className="overflow-hidden">
@@ -384,29 +350,26 @@ export function Player() {
         {/* Player Controls */}
         <div className="flex flex-col items-center gap-1 w-1/2 lg:w-1/3">
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Shuffle Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleShuffle}
               className={cn('h-8 w-8 text-muted-foreground hover:text-foreground transition-colors', isShuffling && !disablePlaylistControls && 'text-accent')}
-              disabled={disablePlaylistControls} // Use the specific disable flag
+              disabled={disablePlaylistControls}
               aria-label={isShuffling ? 'Disable shuffle' : 'Enable shuffle'}
             >
               <Shuffle className="h-4 w-4" />
             </Button>
-            {/* Previous Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={playPreviousSong}
               className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
-              disabled={!currentSong} // Disabled only if no song is loaded
+              disabled={!currentSong}
               aria-label="Previous song / Restart"
             >
               <SkipBack className="h-5 w-5 fill-current" />
             </Button>
-            {/* Play/Pause Button */}
             <Button
               variant="default"
               size="icon"
@@ -415,50 +378,46 @@ export function Player() {
                  "h-10 w-10 rounded-full transition-transform duration-100 ease-in-out",
                  "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 shadow-md hover:shadow-lg"
                )}
-              disabled={!currentSong} // Disabled only if no song is loaded
+              disabled={!currentSong}
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
             </Button>
-            {/* Next Button */}
             <Button
               variant="ghost"
               size="icon"
               onClick={playNextSong}
               className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
-              disabled={!currentSong} // Disabled only if no song is loaded
+              disabled={!currentSong}
               aria-label="Next song"
             >
               <SkipForward className="h-5 w-5 fill-current" />
             </Button>
-            {/* Combined Loop Button */}
              <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleLoopToggle}
                 className={cn('h-8 w-8 text-muted-foreground hover:text-foreground transition-colors',
-                    // Highlight if single song loop OR playlist loop (when not in single mode) is active
                     (isLooping || (isLoopingPlaylist && !disablePlaylistControls)) && 'text-accent'
                  )}
-                disabled={disableLoopSongControl} // Disable only if no song is loaded at all
+                disabled={disableLoopSongControl}
                 aria-label={isLooping ? 'Disable loop' : isLoopingPlaylist ? 'Enable song loop' : 'Enable playlist loop'}
              >
                 {getLoopIcon()}
              </Button>
           </div>
-          {/* Progress Bar Section */}
-           <div className="flex w-full max-w-xl items-center gap-2 px-2 select-none"> {/* Add select-none here */}
+           <div className="flex w-full max-w-xl items-center gap-2 px-2">
              <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
                {formatTime(displayProgress)}
              </span>
              <Slider
                value={[displayProgress]}
-               max={Math.max(displayDuration, 1)} // Ensure max is at least 1
+               max={Math.max(displayDuration, 1)}
                step={0.1}
                className={cn("flex-1", !currentSong && "opacity-50")}
-               onValueChange={handleValueChange} // Update local state while dragging
-               onValueCommit={handleValueCommit} // Finalize seek on commit (pointer up)
-               onPointerDown={handlePointerDown} // Track start of interaction
+               onValueChange={handleValueChange}
+               onValueCommit={handleValueCommit}
+               onPointerDown={handlePointerDown}
                disabled={!currentSong || !currentSongDuration}
                aria-label="Song progress"
              />
@@ -470,7 +429,6 @@ export function Player() {
 
         {/* Volume & Queue Controls */}
         <div className="flex items-center justify-end gap-3 w-1/4 lg:w-1/3">
-           {/* Queue Button & Sheet */}
             <Sheet open={isQueueSheetOpen} onOpenChange={setIsQueueSheetOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -478,7 +436,7 @@ export function Player() {
                     size="icon"
                     className={cn(
                       "h-8 w-8",
-                      queue.length > 0 ? "text-accent" : "text-muted-foreground", // Use accent color when queue has items
+                      queue.length > 0 ? "text-accent" : "text-muted-foreground", // Highlight if queue has items
                       "hover:text-foreground transition-colors" // Standard hover effect
                     )}
                     aria-label="Show queue"
@@ -497,7 +455,6 @@ export function Player() {
                </SheetContent>
             </Sheet>
 
-          {/* Volume Icon (for mute status and indicator) */}
           <Button
             variant="ghost"
             size="icon"
@@ -507,13 +464,12 @@ export function Player() {
           >
             {getVolumeIcon()}
           </Button>
-          {/* Volume Slider - Always Visible */}
-          <div className="w-24 select-none"> {/* Added select-none wrapper */}
+          <div className="w-24">
             <Slider
               value={[isMuted ? 0 : localVolume]}
               max={1}
               step={0.01}
-              className="w-full" // Use base slider styles
+              className="w-full"
               onValueChange={handleVolumeChange}
               aria-label="Volume"
             />
@@ -523,5 +479,3 @@ export function Player() {
     </footer>
   );
 }
-
-    
