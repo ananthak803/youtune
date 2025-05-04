@@ -3,13 +3,14 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, ListMusic, MoreHorizontal, Trash2 } from 'lucide-react'; // Added icons
+import { Plus, ListMusic, MoreHorizontal, Trash2, Pencil } from 'lucide-react'; // Added Pencil icon
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { Playlist } from '@/lib/types';
 import { CreatePlaylistDialog } from './create-playlist-dialog';
 import { DeletePlaylistDialog } from './delete-playlist-dialog'; // Import Delete dialog
+import { RenamePlaylistDialog } from './rename-playlist-dialog'; // Import Rename dialog
 import { usePlaylistStore } from '@/store/playlist-store';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -38,13 +39,17 @@ export function Sidebar({
   selectedPlaylistId,
   onSelectPlaylist,
 }: SidebarProps) {
-  const { createPlaylist, deletePlaylist } = usePlaylistStore((state) => ({
+  const { createPlaylist, deletePlaylist, renamePlaylist } = usePlaylistStore((state) => ({
      createPlaylist: state.createPlaylist,
      deletePlaylist: state.deletePlaylist, // Get delete action
+     renamePlaylist: state.renamePlaylist, // Get rename action
    }));
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false); // State for delete dialog
   const [playlistToDelete, setPlaylistToDelete] = React.useState<Playlist | null>(null); // State for playlist to delete
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = React.useState(false); // State for rename dialog
+  const [playlistToRename, setPlaylistToRename] = React.useState<Playlist | null>(null); // State for playlist to rename
+
 
   const handleCreatePlaylist = (name: string) => {
     if (name.trim()) {
@@ -54,13 +59,12 @@ export function Sidebar({
     }
   };
 
-  // Open the delete confirmation dialog
+  // --- Delete Logic ---
   const openDeleteDialog = (playlist: Playlist) => {
     setPlaylistToDelete(playlist);
     setIsDeleteDialogOpen(true);
   };
 
-  // Handle the actual deletion after confirmation
   const handleConfirmDelete = () => {
     if (playlistToDelete) {
        const deletedName = playlistToDelete.name;
@@ -70,6 +74,32 @@ export function Sidebar({
       toast({ title: 'Playlist Deleted', description: `"${deletedName}" has been deleted.`, variant: 'destructive' });
     }
   };
+
+   // --- Rename Logic ---
+   const openRenameDialog = (playlist: Playlist) => {
+      setPlaylistToRename(playlist);
+      setIsRenameDialogOpen(true);
+    };
+
+    const handleConfirmRename = (newName: string) => {
+      if (playlistToRename && newName.trim() && newName.trim() !== playlistToRename.name) {
+         const oldName = playlistToRename.name;
+        renamePlaylist(playlistToRename.id, newName.trim());
+        setIsRenameDialogOpen(false);
+        setPlaylistToRename(null);
+        toast({ title: 'Playlist Renamed', description: `"${oldName}" renamed to "${newName.trim()}".` });
+      } else {
+          // Close dialog even if name didn't change or was empty
+           setIsRenameDialogOpen(false);
+           setPlaylistToRename(null);
+           if(newName.trim() === playlistToRename?.name) {
+             toast({ title: 'No Change', description: 'Playlist name was not changed.' });
+           } else if (!newName.trim()) {
+             toast({ title: 'Invalid Name', description: 'Playlist name cannot be empty.', variant: 'destructive'});
+           }
+      }
+    };
+
 
   // Ensure this return statement wraps the main JSX
   return (
@@ -127,9 +157,11 @@ export function Sidebar({
                    </Button>
                  </DropdownMenuTrigger>
                  <DropdownMenuContent side="right" align="start">
-                   {/* <DropdownMenuItem>
-                       <Pencil className="mr-2 h-4 w-4" /> Rename (Not Implemented)
-                   </DropdownMenuItem> */}
+                   <DropdownMenuItem
+                     onClick={() => openRenameDialog(playlist)}
+                   >
+                       <Pencil className="mr-2 h-4 w-4" /> Rename
+                   </DropdownMenuItem>
                    <DropdownMenuItem
                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
                      onClick={() => openDeleteDialog(playlist)}
@@ -158,8 +190,15 @@ export function Sidebar({
          playlistName={playlistToDelete?.name}
          onConfirm={handleConfirmDelete}
        />
+       {/* Rename Playlist Dialog */}
+       {playlistToRename && ( // Conditionally render to ensure playlistToRename is not null
+         <RenamePlaylistDialog
+           isOpen={isRenameDialogOpen}
+           onOpenChange={setIsRenameDialogOpen}
+           playlist={playlistToRename}
+           onRename={handleConfirmRename}
+         />
+       )}
     </aside>
   );
 }
-
-    
