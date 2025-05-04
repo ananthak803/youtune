@@ -23,7 +23,6 @@ interface PlaylistState {
 
   // Playlist context tracking for repopulating queue on loop/shuffle
   currentPlaylistContextId: string | null; // ID of the playlist the current queue is based on
-  currentPlaylistContextStartIndex: number; // Original start index (less relevant now, but kept for consistency)
 
   // Actions
   createPlaylist: (name: string) => void;
@@ -74,10 +73,7 @@ const shuffleArray = <T>(array: T[]): T[] => {
 export const usePlaylistStore = create<PlaylistState>()(
   persist(
     (set, get) => ({
-      playlists: [
-          // Add a sample playlist by default if playlists array is empty on initial load
-          // This will be handled by onRehydrateStorage to avoid adding duplicates
-        ],
+      playlists: [], // Initialize with empty playlists
       activePlaylistId: null, // The playlist currently being *viewed*
       queue: [],
       currentQueueIndex: -1, // Should always be 0 when playing, -1 when stopped/empty
@@ -90,7 +86,6 @@ export const usePlaylistStore = create<PlaylistState>()(
       currentSongProgress: 0,
       currentSongDuration: 0,
       currentPlaylistContextId: null,
-      currentPlaylistContextStartIndex: 0,
 
 
       _generateQueueId: () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -428,7 +423,6 @@ export const usePlaylistStore = create<PlaylistState>()(
             currentSongProgress: 0,
             currentSongDuration: 0,
             currentPlaylistContextId: playlistId,
-            currentPlaylistContextStartIndex: startIndex,
           };
           return finalState;
        }),
@@ -462,7 +456,6 @@ export const usePlaylistStore = create<PlaylistState>()(
             currentSongDuration: 0,
             isLoopingPlaylist: false, // Turn off playlist loop
             currentPlaylistContextId: null, // Clear context
-            currentPlaylistContextStartIndex: 0,
           };
           return finalState;
       }),
@@ -650,7 +643,6 @@ export const usePlaylistStore = create<PlaylistState>()(
                 currentSongProgress: 0,
                 currentSongDuration: 0,
                 currentPlaylistContextId: null,
-                currentPlaylistContextStartIndex: 0,
              };
              // Optionally seek player to 0 and pause if needed
              // seekPlayerTo(0);
@@ -721,7 +713,7 @@ export const usePlaylistStore = create<PlaylistState>()(
 
     }),
     {
-      name: 'youtune-playlist-storage-v5', // Increment version for queue logic refinements
+      name: 'youtune-playlist-storage-v6', // Increment version for latest changes
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         playlists: state.playlists,
@@ -732,35 +724,16 @@ export const usePlaylistStore = create<PlaylistState>()(
         isLooping: state.isLooping,
         isLoopingPlaylist: state.isLoopingPlaylist,
         currentPlaylistContextId: state.currentPlaylistContextId,
-        // Remove startIndex persistence as it's less relevant
-        // currentPlaylistContextStartIndex: state.currentPlaylistContextStartIndex,
       }),
-      version: 5, // Incremented version
+      version: 6, // Incremented version
        migrate: (persistedState: any, version: number) => {
-         if (version < 1) {
-             // No changes needed from v0 to v1
+         // Run migration for each version gap
+         if (version < 6) {
+             // v5->v6: No breaking structural changes, but removing sample playlist logic requires clean state on hydrate
+             // The logic will now be handled in onRehydrateStorage
          }
-         if (version < 2) {
-              persistedState.currentPlaylistContextId = null;
-              persistedState.currentPlaylistContextStartIndex = 0;
-         }
-         if (version < 3) {
-              // Reset queue and related playback state
-              persistedState.queue = [];
-              persistedState.currentQueueIndex = -1;
-              persistedState.isPlaying = false;
-              persistedState.currentSongProgress = 0;
-              persistedState.currentSongDuration = 0;
-              persistedState.currentPlaylistContextStartIndex = 0;
-         }
-         if (version < 4) {
-              // No structural changes, but logic changes required reset on hydrate
-         }
-         if (version < 5) {
-              // Remove persisted startIndex
-             delete persistedState.currentPlaylistContextStartIndex;
-             // Queue logic changed again, reset on hydrate
-         }
+         // Add future migrations here following the pattern
+         // if (version < 7) { ... }
 
          return persistedState as PlaylistState;
        },
@@ -769,7 +742,6 @@ export const usePlaylistStore = create<PlaylistState>()(
           if (error) {
             console.error("[Store] Hydration error:", error);
           } else if (persistedState) {
-
              // De-duplicate songs within each playlist on load
               const dedupedPlaylists = persistedState.playlists?.map(playlist => {
                  if (!playlist || !Array.isArray(playlist.songs)) {
@@ -787,37 +759,19 @@ export const usePlaylistStore = create<PlaylistState>()(
              }) ?? [];
              persistedState.playlists = dedupedPlaylists;
 
-              // Add sample playlist if none exist after deduplication
-             if (persistedState.playlists.length === 0) {
-                 const samplePlaylist: Playlist = {
-                     id: generateId(),
-                     name: "My Mix Vol. 1",
-                     songs: [
-                         // Add some sample songs (ensure valid IDs and metadata)
-                         { id: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up', author: 'Rick Astley', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg' },
-                         { id: '3JZ_D3ELwOQ', title: 'Nyan Cat [original]', author: 'saraj00n', url: 'https://www.youtube.com/watch?v=3JZ_D3ELwOQ', thumbnailUrl: 'https://i.ytimg.com/vi/3JZ_D3ELwOQ/hqdefault.jpg' },
-                         { id: 'QH2-TGUlwu4', title: 'What is Love', author: 'Haddaway', url: 'https://www.youtube.com/watch?v=QH2-TGUlwu4', thumbnailUrl: 'https://i.ytimg.com/vi/QH2-TGUlwu4/hqdefault.jpg' },
-                     ]
-                 };
-                 persistedState.playlists.push(samplePlaylist);
-                 persistedState.activePlaylistId = samplePlaylist.id; // Set as active
-             }
-
-
-            // Reset transient state (Queue, Playback)
+            // Reset transient state (Queue, Playback) - ALWAYS reset these on load
             persistedState.queue = [];
             persistedState.currentQueueIndex = -1;
             persistedState.isPlaying = false;
             persistedState.currentSongProgress = 0;
             persistedState.currentSongDuration = 0;
-            // Reset startIndex as it's no longer persisted
-            persistedState.currentPlaylistContextStartIndex = 0;
 
              // Validate activePlaylistId
              let activeIdIsValid = false;
              if (persistedState.activePlaylistId) {
                  activeIdIsValid = persistedState.playlists.some(p => p.id === persistedState.activePlaylistId);
              }
+             // If active ID is invalid OR no playlists exist, set to null or first available
              if (!activeIdIsValid) {
                  persistedState.activePlaylistId = persistedState.playlists[0]?.id ?? null;
              }
@@ -829,23 +783,13 @@ export const usePlaylistStore = create<PlaylistState>()(
              }
               if (!contextIdIsValid) {
                   persistedState.currentPlaylistContextId = null;
-                  // persistedState.currentPlaylistContextStartIndex = 0; // No longer exists
               }
 
           } else {
-             // No persisted state found, initialize with defaults + sample playlist
+             // No persisted state found, initialize with defaults (empty playlists)
              if (state) {
-                const samplePlaylist: Playlist = {
-                     id: generateId(),
-                     name: "My Mix Vol. 1",
-                     songs: [
-                         { id: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up', author: 'Rick Astley', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg' },
-                         { id: '3JZ_D3ELwOQ', title: 'Nyan Cat [original]', author: 'saraj00n', url: 'https://www.youtube.com/watch?v=3JZ_D3ELwOQ', thumbnailUrl: 'https://i.ytimg.com/vi/3JZ_D3ELwOQ/hqdefault.jpg' },
-                         { id: 'QH2-TGUlwu4', title: 'What is Love', author: 'Haddaway', url: 'https://www.youtube.com/watch?v=QH2-TGUlwu4', thumbnailUrl: 'https://i.ytimg.com/vi/QH2-TGUlwu4/hqdefault.jpg' },
-                     ]
-                 };
-                state.playlists = [samplePlaylist];
-                state.activePlaylistId = samplePlaylist.id;
+                state.playlists = []; // Start with empty playlists
+                state.activePlaylistId = null; // No active playlist initially
                 state.volume = 0.8;
                 state.isMuted = false;
                 state.isShuffling = false;
@@ -857,7 +801,6 @@ export const usePlaylistStore = create<PlaylistState>()(
                 state.currentSongProgress = 0;
                 state.currentSongDuration = 0;
                 state.currentPlaylistContextId = null;
-                state.currentPlaylistContextStartIndex = 0;
              }
           }
         };
