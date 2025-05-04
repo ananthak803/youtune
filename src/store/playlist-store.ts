@@ -628,18 +628,22 @@ export const usePlaylistStore = create<PlaylistState>()(
            return finalState;
        }),
 
-      setCurrentSongProgress: (progress) => set((state) => {
-        // console.log(`[Store] setCurrentSongProgress triggered with progress: ${progress}`); // Too noisy
-        if (state.isPlaying || progress === 0) {
-            const currentSong = state.queue[state.currentQueueIndex];
-            const duration = state.currentSongDuration;
-             if (currentSong && progress >= 0 && progress <= (duration || Infinity)) {
-               return { currentSongProgress: progress };
-             }
-        }
-        // console.log("[Store] setCurrentSongProgress: Conditions not met (not playing or invalid progress). No change.");
-        return {};
-      }),
+       setCurrentSongProgress: (progress) => set((state) => {
+           // This state update is now primarily driven by the Player component's onPointerUp
+           // and by song changes/restarts. The debounced update from handleProgress handles passive updates.
+           // We still need this action to allow direct setting of progress.
+           const currentSong = state.queue[state.currentQueueIndex];
+           if (currentSong && progress >= 0) {
+               const duration = state.currentSongDuration || Infinity;
+               const clampedProgress = Math.min(progress, duration);
+               // Only update if the value is different to avoid unnecessary re-renders
+               if (clampedProgress !== state.currentSongProgress) {
+                 // console.log(`[Store] setCurrentSongProgress explicitly set to: ${clampedProgress}`); // Can be noisy
+                 return { currentSongProgress: clampedProgress };
+               }
+           }
+           return {};
+         }),
 
       setCurrentSongDuration: (duration) => set((state) => {
          // console.log(`[Store] setCurrentSongDuration triggered with duration: ${duration}`); // Might be noisy

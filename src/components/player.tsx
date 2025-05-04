@@ -99,6 +99,7 @@ export function Player() {
 
   const playerRef = useRef<ReactPlayer>(null);
   const [seeking, setSeeking] = useState(false);
+  const [seekValue, setSeekValue] = useState<number | null>(null); // Local state for slider value during drag
   const [localVolume, setLocalVolume] = useState(volume);
   const [hasMounted, setHasMounted] = useState(false);
   const [isQueueSheetOpen, setIsQueueSheetOpen] = useState(false); // State for queue sheet
@@ -137,10 +138,11 @@ export function Player() {
   }, [currentSong, setCurrentSongProgress, setCurrentSongDuration]);
 
   // Effect to handle seeking when currentSongProgress is reset to 0 by playPreviousSong (restart)
+  // Also handles external progress resets while playing
   useEffect(() => {
       if (currentSong && currentSongProgress === 0 && isPlaying && playerRef.current && !seeking) {
           // If progress is 0, song exists, isPlaying, and we're not manually seeking,
-          // it might be due to a restart action. Ensure player seeks.
+          // it might be due to a restart action or external reset. Ensure player seeks.
           console.log("[Player Effect] Progress reset detected while playing. Seeking player to 0.");
           playerRef.current.seekTo(0);
       }
@@ -163,6 +165,7 @@ export function Player() {
 
  const handleProgress = useCallback(
     (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number; }) => {
+        // Only update global progress if NOT seeking
         if (!seeking && hasMounted && currentSongIdRef.current) {
             const duration = currentSongDuration || 0;
              // Allow slight overshoot for progress updates, clamp value sent to store
@@ -206,31 +209,33 @@ export function Player() {
      if (!currentSong) return;
      console.log("[Player Seek] Mouse Down");
      setSeeking(true);
-     // Optional: Immediately update progress based on click position for better responsiveness
-     // handleSeekInteraction(e);
+     // Initialize local seek value with current progress
+     setSeekValue(currentSongProgress);
   };
 
+  // Update local seek value while dragging
   const handleSeekChange = (value: number[]) => {
-     if (!currentSong || !hasMounted) return;
-     // console.log(`[Player Seek] Change (Dragging): ${value[0]}`); // Can be noisy
-     // Update visual progress immediately while dragging
-     setCurrentSongProgress(value[0]);
+     if (!currentSong || !hasMounted || !seeking) return;
+     setSeekValue(value[0]);
   };
 
+  // Finalize seek on mouse up
   const handleSeekMouseUp = (value: number[]) => {
-    if (!currentSong || !hasMounted) return;
-    const seekTime = value[0];
-    console.log(`[Player Seek] Mouse Up. Seeking to: ${seekTime}`);
+    if (!currentSong || !hasMounted || !seeking) return; // Ensure we are actually seeking
+    const finalSeekTime = value[0];
+    console.log(`[Player Seek] Mouse Up. Seeking to: ${finalSeekTime}`);
+
+    // Seek the actual player
     if (playerRef.current) {
-        playerRef.current.seekTo(seekTime);
+        playerRef.current.seekTo(finalSeekTime);
     }
-    // Ensure final progress state is set
-    setCurrentSongProgress(seekTime);
-    // Delay setting seeking to false slightly to avoid progress conflicts
-    setTimeout(() => {
-        console.log("[Player Seek] Setting seeking to false");
-        setSeeking(false);
-    }, 100); // Increased delay slightly
+    // Update the global progress state
+    setCurrentSongProgress(finalSeekTime);
+
+    // Reset seeking state
+    setSeeking(false);
+    setSeekValue(null); // Clear local seek value
+    console.log("[Player Seek] Finished seek.");
   };
 
 
@@ -288,7 +293,7 @@ export function Player() {
   const disableLoopSongControl = !currentSong;
 
   // Use local state for display values to avoid flickering during seeking
-  const displayProgress = currentSong ? currentSongProgress : 0;
+  const displayProgress = currentSong ? (seekValue !== null ? seekValue : currentSongProgress) : 0; // Show seekValue during drag
   const displayDuration = currentSong ? currentSongDuration : 0;
 
 
@@ -443,9 +448,9 @@ export function Player() {
                  seeking && "[&>button]:scale-150", // Scale up more when actively seeking
                  !currentSong && "[&>button]:hidden" // Hide thumb if no song
                 )}
-              onValueChange={handleSeekChange}
+              onValueChange={handleSeekChange} // Changed to update local state only
               onPointerDown={handleSeekMouseDown}
-              onPointerUp={handleSeekMouseUp} // Changed to pointerUp for consistency
+              onPointerUp={handleSeekMouseUp} // Finalize seek on pointer up
               disabled={!currentSong || !currentSongDuration}
               aria-label="Song progress"
             />
