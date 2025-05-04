@@ -17,14 +17,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card, CardContent } from '@/components/ui/card'; // Use CardContent for padding
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-// Correct the import name as suggested by the error
 import { searchYoutubeAction, getYoutubeMetadataAction } from '@/actions/youtube-actions';
 import type { YoutubeSearchResult, Song, Playlist, YoutubeVideoMetadata } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { SelectPlaylistDialog } from './select-playlist-dialog';
-import { ListPlus, Search, Loader2, Music, Youtube } from 'lucide-react'; // Added Youtube icon
+import { ListPlus, Search, Loader2, Music, Youtube } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { extractYoutubeVideoId } from '@/services/youtube';
 import { cn } from '@/lib/utils';
@@ -85,8 +84,6 @@ export function YoutubeSearch() {
   // Fetch metadata for a single video ID (used internally)
   const fetchMetadata = async (videoId: string): Promise<Song | null> => {
     try {
-      // Use the server action which checks for API key internally
-      // Correct the function name usage
       const metadata: YoutubeVideoMetadata = await getYoutubeMetadataAction(videoId);
       const song: Song = {
         id: videoId,
@@ -103,17 +100,17 @@ export function YoutubeSearch() {
         description: error.message || 'Could not fetch video details.',
         variant: 'destructive',
       });
-      return null; // Indicate failure
+      return null;
     }
   };
 
   // Initiate adding process (fetch full metadata first)
   const handleInitiateAddSong = async (result: YoutubeSearchResult) => {
-    setIsLoading(true); // Show loading state while fetching metadata
+    setIsLoading(true);
     const preparedSong = await fetchMetadata(result.videoId);
     setIsLoading(false);
 
-    if (!preparedSong) return; // Stop if metadata fetch failed
+    if (!preparedSong) return;
 
     setSongToAdd(preparedSong);
 
@@ -125,10 +122,8 @@ export function YoutubeSearch() {
       });
       setSongToAdd(null);
     } else if (playlists.length === 1) {
-      // Add directly to the only playlist
       addSongToSpecificPlaylist(playlists[0].id, preparedSong);
     } else {
-      // Open dialog to select playlist
       setIsSelectPlaylistDialogOpen(true);
     }
   };
@@ -160,8 +155,8 @@ export function YoutubeSearch() {
 
   // Placeholder rendering
   const renderPlaceholder = () => (
-     <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-4 text-center p-8"> {/* Increased padding */}
-        <Youtube className="w-16 h-16 opacity-30 text-destructive" /> {/* Larger, subtle icon */}
+     <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-4 text-center p-8">
+        <Youtube className="w-16 h-16 opacity-30 text-destructive" />
         <p className="text-base font-medium">Search YouTube</p>
         <p className="text-sm">Find videos and add them directly to your playlists.</p>
      </div>
@@ -177,8 +172,8 @@ export function YoutubeSearch() {
 
   return (
     <>
-      {/* Search Form Section - sticky */}
-       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-6 pb-4 border-b mb-4">
+      {/* Search Form Section - Now part of the main flow, not sticky */}
+       <div className="px-4 sm:px-6 pb-4 mb-4"> {/* Removed top padding, adjusted bottom margin */}
          <Form {...form}>
            <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-center gap-2">
              <FormField
@@ -195,7 +190,7 @@ export function YoutubeSearch() {
                           {...field}
                           disabled={isLoading}
                           aria-label="YouTube Search Input"
-                          className="h-9 pl-8 rounded-full focus-visible:ring-primary bg-muted border-transparent focus:border-border focus:bg-background" // Tweaked input style
+                          className="h-9 pl-8 rounded-full focus-visible:ring-primary bg-muted border-transparent focus:border-border focus:bg-background"
                         />
                      </div>
                    </FormControl>
@@ -212,24 +207,24 @@ export function YoutubeSearch() {
        </div>
 
       {/* Results Area - Scrollable */}
-      <ScrollArea className="flex-1 px-4 pb-6"> {/* Added padding */}
+      <ScrollArea className="flex-1 px-4 sm:px-6 pb-6"> {/* Added padding */}
          {isLoading && renderLoading()}
 
          {!isLoading && searchResults.length > 0 && (
            <div className="space-y-3">
              {searchResults.map((result) => (
                <Card key={result.videoId} className="group overflow-hidden transition-shadow hover:shadow-md border border-transparent hover:border-border bg-card/50 hover:bg-card">
-                 <CardContent className="p-0 flex items-center gap-3"> {/* No internal padding, flex layout */}
+                 <CardContent className="p-0 flex items-center gap-3">
                    {/* Image Container */}
-                   <div className="w-20 h-16 sm:w-24 sm:h-[68px] flex-shrink-0 relative bg-muted overflow-hidden rounded-l-md"> {/* Slightly taller, rounded left */}
+                   <div className="w-20 h-16 sm:w-24 sm:h-[68px] flex-shrink-0 relative bg-muted overflow-hidden rounded-l-md">
                      <Image
                        src={result.thumbnailUrl || '/placeholder-album.svg'}
                        alt={result.title}
                        fill
-                       sizes="(max-width: 640px) 80px, 96px" // Responsive sizes
-                       className="object-cover transition-transform group-hover:scale-105" // Subtle hover zoom
+                       sizes="(max-width: 640px) 80px, 96px"
+                       className="object-cover transition-transform group-hover:scale-105"
                        data-ai-hint="youtube video thumbnail"
-                       unoptimized // Optimization might be less critical here, consider enabling if needed
+                       unoptimized
                        onError={(e) => {
                          e.currentTarget.style.display = 'none';
                          const parent = e.currentTarget.parentElement;
@@ -243,19 +238,19 @@ export function YoutubeSearch() {
                      />
                    </div>
                    {/* Text Content */}
-                   <div className="flex-1 min-w-0 py-2 pr-2"> {/* Padding for text */}
-                     <p className="font-medium text-sm leading-snug line-clamp-2 mb-0.5 group-hover:text-primary transition-colors">{result.title}</p> {/* Limit to 2 lines, change color on hover */}
-                     <p className="text-xs text-muted-foreground line-clamp-1">{result.author}</p> {/* Limit author to 1 line */}
+                   <div className="flex-1 min-w-0 py-2 pr-2">
+                     <p className="font-medium text-sm leading-snug line-clamp-2 mb-0.5 group-hover:text-primary transition-colors">{result.title}</p>
+                     <p className="text-xs text-muted-foreground line-clamp-1">{result.author}</p>
                    </div>
                    {/* Add Button */}
-                   <div className="pr-3 pl-1 flex-shrink-0"> {/* Padding around button */}
+                   <div className="pr-3 pl-1 flex-shrink-0">
                        <Button
                          variant="ghost"
                          size="icon"
                          className={cn(
-                            "h-8 w-8 text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 focus-visible:opacity-100", // Fade in on hover
-                            "hover:bg-accent/50 hover:text-accent-foreground", // Subtle hover background
-                            (isLoading || isSelectPlaylistDialogOpen || (songToAdd !== null && songToAdd.id === result.videoId)) && "cursor-not-allowed opacity-30" // Dim if disabled
+                            "h-8 w-8 text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                            "hover:bg-accent/50 hover:text-accent-foreground",
+                            (isLoading || isSelectPlaylistDialogOpen || (songToAdd !== null && songToAdd.id === result.videoId)) && "cursor-not-allowed opacity-30"
                          )}
                          onClick={() => handleInitiateAddSong(result)}
                          aria-label={`Add "${result.title}" to playlist`}

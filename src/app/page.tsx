@@ -5,9 +5,9 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { Player } from '@/components/player';
 import { PlaylistView } from '@/components/playlist-view';
-import { AddSongForm } from '@/components/add-song-form'; // Re-import AddSongForm
-import { YoutubeSearch } from '@/components/youtube-search'; // Import the search component
-import { QueueView } from '@/components/queue-view'; // Import QueueView
+import { AddSongForm } from '@/components/add-song-form';
+import { YoutubeSearch } from '@/components/youtube-search';
+import { QueueView } from '@/components/queue-view';
 import type { Playlist } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,10 +23,10 @@ import {
   DialogClose,
  } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { Plus, ListMusic, Search, Settings, ListOrdered, Youtube, Link as LinkIcon, Share2 } from 'lucide-react'; // Import Youtube icon, LinkIcon, Share2
+import { Plus, ListMusic, Search, Settings, ListOrdered, Youtube, Link as LinkIcon, Share2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'; // Import Tooltip components
-import { toast } from '@/hooks/use-toast'; // Import toast
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from '@/hooks/use-toast';
 
 export default function Home() {
   // Get state from the store
@@ -36,7 +36,7 @@ export default function Home() {
 
   // Local state
   const [selectedPlaylistForView, setSelectedPlaylistForView] = useState<Playlist | null>(null);
-  const [isSearchSidebarOpen, setIsSearchSidebarOpen] = useState(false); // State for search sidebar
+  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false); // State for search dialog
   const [isPlaylistSheetOpen, setIsPlaylistSheetOpen] = useState(false); // State for mobile playlist sheet
   const [isQueueSheetOpen, setIsQueueSheetOpen] = useState(false); // State for queue sheet
   const [isAddSongDialogOpen, setIsAddSongDialogOpen] = useState(false); // State for Add Song Dialog
@@ -85,7 +85,6 @@ export default function Home() {
         {isMobile && (
           <header className="flex items-center justify-between p-3 border-b bg-card sticky top-0 z-20">
               <h1 className="text-xl font-bold text-primary">YouTune</h1>
-              {/* Maybe add share button here too? */}
                <Button
                    variant="ghost"
                    size="icon"
@@ -111,38 +110,38 @@ export default function Home() {
           <main className="flex flex-1 flex-col overflow-hidden relative">
 
             <ScrollArea className="flex-1">
-              <div className="container mx-auto px-4 pt-6 pb-8 md:px-8"> {/* Reduced pt to 6 */}
+              <div className="container mx-auto px-4 pt-6 pb-8 md:px-8">
 
                  {/* Search Button & Add URL Button Container */}
-                 <div className="mb-6 flex flex-row items-stretch gap-3"> {/* Stretch items */}
+                 <div className="mb-6 flex flex-row items-stretch gap-3">
 
-                   {/* Button to open YouTube Search (Main Action) */}
-                   <Sheet open={isSearchSidebarOpen} onOpenChange={setIsSearchSidebarOpen}>
-                     <SheetTrigger asChild>
+                   {/* Button to open YouTube Search Dialog (Main Action) */}
+                   <Dialog open={isSearchDialogOpen} onOpenChange={setIsSearchDialogOpen}>
+                     <DialogTrigger asChild>
                        <Button
                          variant="outline"
                          size="default"
-                         className="flex-1 flex items-center gap-2 justify-center h-11" // Take more space, fixed height
+                         className="flex-1 flex items-center gap-2 justify-center h-11"
                          aria-label="Search YouTube"
                        >
                          <Youtube className="h-5 w-5 text-destructive" />
                          Search YouTube
                        </Button>
-                     </SheetTrigger>
-                     <SheetContent side="right" className="w-full sm:max-w-md md:max-w-lg flex flex-col p-0"> {/* Adjust max width, remove padding */}
-                       <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
-                          <SheetTitle>Search YouTube</SheetTitle>
-                          <SheetDescription>
+                     </DialogTrigger>
+                     <DialogContent className="sm:max-w-3xl h-[80vh] flex flex-col p-0"> {/* Wider dialog, fixed height, no padding */}
+                       <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+                          <DialogTitle>Search YouTube</DialogTitle>
+                          <DialogDescription>
                             Find videos and add them to your playlists.
-                          </SheetDescription>
-                       </SheetHeader>
+                          </DialogDescription>
+                       </DialogHeader>
+                       {/* YoutubeSearch component now handles its own padding and scrolling */}
                        <div className="flex-1 overflow-hidden flex flex-col">
-                           {/* YoutubeSearch component now handles its own padding and scrolling */}
                            <YoutubeSearch />
                        </div>
-                       {/* Close button handled by SheetContent */}
-                     </SheetContent>
-                   </Sheet>
+                       {/* Close button handled by DialogContent */}
+                     </DialogContent>
+                   </Dialog>
 
                    {/* Button to open Add Song via URL Dialog (Secondary Action) */}
                    <Dialog open={isAddSongDialogOpen} onOpenChange={setIsAddSongDialogOpen}>
@@ -151,8 +150,8 @@ export default function Home() {
                          <DialogTrigger asChild>
                             <Button
                              variant="outline"
-                             size="icon" // Keep as icon button
-                             className="shrink-0 h-11 w-11" // Fixed height/width
+                             size="icon"
+                             className="shrink-0 h-11 w-11"
                              aria-label="Add song from URL"
                             >
                              <LinkIcon className="h-5 w-5" />
@@ -170,7 +169,6 @@ export default function Home() {
                            Paste a YouTube video URL to add it to a playlist or play it directly.
                          </DialogDescription>
                        </DialogHeader>
-                       {/* AddSongForm is now inside the dialog */}
                        <div className="pt-4">
                            <AddSongForm onSongAdded={() => setIsAddSongDialogOpen(false)} />
                        </div>
@@ -245,11 +243,11 @@ export default function Home() {
               </SheetContent>
             </Sheet>
 
-             {/* Search Sheet Trigger */}
+             {/* Search Dialog Trigger (Mobile) */}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsSearchSidebarOpen(true)}
+              onClick={() => setIsSearchDialogOpen(true)}
               className="flex flex-col h-auto items-center gap-1 text-muted-foreground text-xs"
             >
               <Search className="h-5 w-5" />
@@ -289,7 +287,6 @@ export default function Home() {
                  <SheetHeader className="p-4 border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                    <SheetTitle>Playback Queue</SheetTitle>
                  </SheetHeader>
-                 {/* Add explicit title for accessibility */}
                  <h2 className="sr-only">Playback Queue</h2>
                  <QueueView />
                </SheetContent>
