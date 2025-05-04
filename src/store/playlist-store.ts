@@ -238,7 +238,7 @@ export const usePlaylistStore = create<PlaylistState>()(
 
            // Check if the added song should be immediately added to the queue
            // This happens if the modified playlist is the current playback context.
-           if (state.currentPlaylistContextId === playlistId) {
+           if (state.currentPlaylistContextId === playlistId && state.queue.length > 0) {
                const newQueueItem: QueueSong = {
                    ...song,
                    queueId: state._generateQueueId(),
@@ -246,11 +246,20 @@ export const usePlaylistStore = create<PlaylistState>()(
                };
                let updatedQueue = [...state.queue];
 
-               // Add the new song to the end of the current queue.
-               // Shuffle logic is handled when the playlist is initially played or reshuffled.
-               // Adding a song while playing shouldn't reshuffle the whole queue immediately.
-               updatedQueue.push(newQueueItem);
-               console.log(`[Store] Added song ${song.id} to the end of the current queue (context match).`);
+               // Find the index of the last song from the current context playlist in the queue
+                let lastContextSongIndex = -1;
+                for (let i = updatedQueue.length - 1; i >= 0; i--) {
+                  if (updatedQueue[i].playlistContextId === playlistId) {
+                    lastContextSongIndex = i;
+                    break;
+                  }
+                }
+
+               // Insert the new song after the last song from the same context, or at the end if no context songs exist
+               const insertionIndex = lastContextSongIndex !== -1 ? lastContextSongIndex + 1 : updatedQueue.length;
+               updatedQueue.splice(insertionIndex, 0, newQueueItem);
+
+               console.log(`[Store] Added song ${song.id} into the current queue at index ${insertionIndex} (context match).`);
                return { playlists: updatedPlaylists, queue: updatedQueue };
            }
 
@@ -283,43 +292,35 @@ export const usePlaylistStore = create<PlaylistState>()(
 
           if (state.currentPlaylistContextId === playlistId) {
                const initialQueueLength = state.queue.length;
+               const originalCurrentQueueId = state.queue[state.currentQueueIndex]?.queueId; // ID of the song playing before removal
+
                newQueue = state.queue.filter(queueSong => queueSong.id !== songId);
                songRemovedFromQueue = newQueue.length < initialQueueLength;
 
                if (songRemovedFromQueue) {
                    console.log(`[Store] Removed ${initialQueueLength - newQueue.length} instance(s) of song ${songId} from queue (context match).`);
-                   const currentQueueSong = state.queue[state.currentQueueIndex];
 
-                   // If the removed song WAS the currently playing song
-                   if (currentQueueSong?.id === songId) {
-                       console.log(`[Store] Removed currently playing song (ID: ${songId}) from queue.`);
-                       if (newQueue.length > 0) {
-                           // Try to play the next available song in the modified queue
-                           newCurrentQueueIndex = Math.min(state.currentQueueIndex, newQueue.length - 1);
-                           if (newCurrentQueueIndex < 0) newCurrentQueueIndex = 0;
-                           console.log(`[Store] Moving to next song in queue at index: ${newCurrentQueueIndex}`);
-                       } else {
-                           // Queue became empty
-                           newCurrentQueueIndex = -1;
-                           newIsPlaying = false;
-                           console.log("[Store] Queue became empty after removing song.");
-                       }
+                   // Find the new index of the song that *was* playing
+                   const newIndexForOriginalCurrent = newQueue.findIndex(qSong => qSong.queueId === originalCurrentQueueId);
+
+                   if (newIndexForOriginalCurrent !== -1) {
+                       // The currently playing song wasn't the one removed, just update its index
+                       newCurrentQueueIndex = newIndexForOriginalCurrent;
+                       console.log(`[Store] Adjusted current queue index to ${newCurrentQueueIndex} after song removal.`);
                    } else {
-                       // If the removed song was NOT the current one, adjust the index if needed
-                       const originalCurrentQueueId = state.queue[state.currentQueueIndex]?.queueId;
-                       const newIndexForCurrent = newQueue.findIndex(qSong => qSong.queueId === originalCurrentQueueId);
-                       if (newIndexForCurrent !== -1) {
-                           newCurrentQueueIndex = newIndexForCurrent;
-                            console.log(`[Store] Adjusted current queue index to ${newCurrentQueueIndex} after song removal.`);
-                       } else {
-                            // Fallback if current song somehow disappeared (shouldn't happen here)
-                           newCurrentQueueIndex = 0;
-                            if (newQueue.length === 0) {
-                               newCurrentQueueIndex = -1;
-                               newIsPlaying = false;
-                            }
-                            console.warn('[Store] Could not find current song in queue after filtering. Resetting index.');
-                       }
+                        // The currently playing song *was* removed
+                        console.log(`[Store] Removed currently playing song (ID: ${songId}) from queue.`);
+                        if (newQueue.length > 0) {
+                             // Try to play the next available song (the one now at the index where the removed song was)
+                            newCurrentQueueIndex = Math.min(state.currentQueueIndex, newQueue.length - 1); // Use the old index or the last valid index
+                            if (newCurrentQueueIndex < 0) newCurrentQueueIndex = 0;
+                            console.log(`[Store] Moving to next song in queue at index: ${newCurrentQueueIndex}`);
+                        } else {
+                            // Queue became empty
+                            newCurrentQueueIndex = -1;
+                            newIsPlaying = false;
+                            console.log("[Store] Queue became empty after removing song.");
+                        }
                    }
                }
            }
@@ -364,14 +365,26 @@ export const usePlaylistStore = create<PlaylistState>()(
            let updatedIndex = state.currentQueueIndex;
            if (state.currentPlaylistContextId === playlistId) {
                console.log("[Store] Reordered playlist is current context. Rebuilding queue.");
-               const currentSongId = state.queue[state.currentQueueIndex]?.id;
+               const currentQueueId = state.queue[state.currentQueueIndex]?.queueId; // Use queueId
                updatedQueue = state._rebuildQueueFromContext({ ...state, playlists: updatedPlaylists });
-               updatedIndex = updatedQueue.findIndex(qSong => qSong.id === currentSongId);
-               if (updatedIndex === -1) { // If current song wasn't found (e.g., removed?), default to start
-                  updatedIndex = 0;
-                  if (updatedQueue.length === 0) updatedIndex = -1;
+
+                // Find the new index of the song that was playing using its unique queueId
+                updatedIndex = updatedQueue.findIndex(qSong => qSong.queueId === currentQueueId);
+
+                if (updatedIndex === -1) { // If current song wasn't found (e.g., removed externally?), default to start
+                  // Try finding based on song ID as a fallback, less reliable if duplicates exist
+                  const currentSongId = state.queue.find(q => q.queueId === currentQueueId)?.id;
+                  updatedIndex = updatedQueue.findIndex(qSong => qSong.id === currentSongId);
+                  if (updatedIndex === -1) {
+                      updatedIndex = 0; // Default to start if still not found
+                      if (updatedQueue.length === 0) updatedIndex = -1;
+                      console.warn("[Store] Current song not found in rebuilt queue after reorder. Resetting index.");
+                  } else {
+                      console.log("[Store] Found current song in rebuilt queue by ID fallback.");
+                  }
+               } else {
+                  console.log(`[Store] Queue rebuilt. New current index: ${updatedIndex}`);
                }
-               console.log(`[Store] Queue rebuilt. New current index: ${updatedIndex}`);
            }
 
            return { playlists: updatedPlaylists, queue: updatedQueue, currentQueueIndex: updatedIndex };
@@ -534,55 +547,58 @@ export const usePlaylistStore = create<PlaylistState>()(
         }
 
         let newQueue = [...queue];
-        let nextIndex = currentQueueIndex + 1; // Tentative next index
+        let nextIndex = -1;
 
-        // If NOT looping playlist, remove the song that just finished.
-        if (!isLoopingPlaylist) {
-            console.log(`[Store playNextSong] Removing completed song: "${queue[currentQueueIndex]?.title}" at index ${currentQueueIndex}.`);
-            newQueue.splice(currentQueueIndex, 1);
-            // The next logical song is now at the *same index* the previous song was at
-            nextIndex = currentQueueIndex;
+        // Remove the song that just finished/was skipped from the *start* of the queue
+        if (newQueue.length > 0) {
+            const finishedSong = newQueue.shift(); // Remove the first element
+            console.log(`[Store playNextSong] Removed completed/skipped song: "${finishedSong?.title}" from start of queue.`);
+        } else {
+             console.log("[Store playNextSong] Queue was already empty after attempting shift.");
+             return { isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 };
         }
 
-        // 2. Check if next index is within the (potentially modified) queue bounds
-        if (nextIndex < newQueue.length) {
-            const nextSong = newQueue[nextIndex];
-            console.log(`[Store playNextSong] Playing next song in queue: "${nextSong.title}" at index ${nextIndex}.`);
-            return {
-                queue: newQueue, // Update queue if song was removed
-                currentQueueIndex: nextIndex,
-                isPlaying: true,
-                currentSongProgress: 0,
-                currentSongDuration: 0,
-            };
-        }
 
-        // 3. Reached the end of the queue
-        console.log("[Store playNextSong] Reached end of queue.");
-        if (isLoopingPlaylist) {
-            console.log("[Store playNextSong] Playlist Loop is ON. Rebuilding queue from context.");
-            const rebuiltQueue = _rebuildQueueFromContext(state); // Use helper
+        // Check if the queue is now empty
+        if (newQueue.length === 0) {
+            console.log("[Store playNextSong] Queue is now empty.");
+            if (isLoopingPlaylist) {
+                console.log("[Store playNextSong] Playlist Loop is ON. Rebuilding queue from context.");
+                const rebuiltQueue = _rebuildQueueFromContext(state); // Use helper
 
-            if (rebuiltQueue.length > 0) {
-                const nextSong = rebuiltQueue[0];
-                console.log(`[Store playNextSong] Looping: Playing first song "${nextSong.title}" of rebuilt queue.`);
+                if (rebuiltQueue.length > 0) {
+                    const nextSong = rebuiltQueue[0];
+                    console.log(`[Store playNextSong] Looping: Playing first song "${nextSong.title}" of rebuilt queue.`);
+                    return {
+                        queue: rebuiltQueue, // Replace queue with the rebuilt one
+                        currentQueueIndex: 0, // Start from the beginning
+                        isPlaying: true,
+                        currentSongProgress: 0,
+                        currentSongDuration: 0,
+                    };
+                } else {
+                    console.warn("[Store playNextSong] Loop enabled but rebuilt queue is empty. Stopping playback.");
+                    return { queue: [], isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 };
+                }
+            } else {
+                console.log("[Store playNextSong] Playlist Loop is OFF. Queue empty. Stopping playback.");
                 return {
-                    queue: rebuiltQueue, // Replace queue with the rebuilt one
-                    currentQueueIndex: 0, // Start from the beginning
-                    isPlaying: true,
+                    queue: [], // Queue is empty
+                    isPlaying: false,
+                    currentQueueIndex: -1, // Reset index
                     currentSongProgress: 0,
                     currentSongDuration: 0,
                 };
-            } else {
-                console.warn("[Store playNextSong] Loop enabled but rebuilt queue is empty. Stopping playback.");
-                return { queue: [], isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 };
             }
         } else {
-            console.log("[Store playNextSong] Playlist Loop is OFF. Reached end. Stopping playback.");
+            // If the queue is not empty, play the song that is now at index 0
+            nextIndex = 0;
+            const nextSong = newQueue[nextIndex];
+            console.log(`[Store playNextSong] Playing next song in queue: "${nextSong.title}" at new index 0.`);
             return {
-                queue: newQueue, // Keep the queue (which might be empty now)
-                isPlaying: false,
-                currentQueueIndex: -1, // Reset index
+                queue: newQueue, // Update queue (song was removed)
+                currentQueueIndex: nextIndex,
+                isPlaying: true,
                 currentSongProgress: 0,
                 currentSongDuration: 0,
             };
@@ -594,64 +610,55 @@ export const usePlaylistStore = create<PlaylistState>()(
         console.log("[Store playPreviousSong] Triggered.");
         const { queue, currentQueueIndex, isLoopingPlaylist, currentSongProgress, _rebuildQueueFromContext } = state;
 
-        if (queue.length === 0) {
-             console.warn("[Store playPreviousSong] Queue is empty.");
-             return {};
-        }
-        if (currentQueueIndex === -1) {
-             console.warn("[Store playPreviousSong] No current song index.");
+         // Previous song logic is less common in Spotify-like queues (usually restarts or relies on history)
+         // For simplicity, we'll just restart the current song if > 3 seconds, otherwise do nothing substantial
+         // A more complex implementation would involve a separate 'history' stack.
+
+        if (queue.length === 0 || currentQueueIndex === -1) {
+             console.warn("[Store playPreviousSong] Queue is empty or no song playing.");
              return {};
         }
 
-        // If more than 3 seconds into the song OR it's the first song and not looping, restart it
-        if (currentSongProgress > 3 || (currentQueueIndex === 0 && !isLoopingPlaylist)) {
-             console.log("[Store playPreviousSong] Restarting current song.");
+        // If more than 3 seconds into the song, just restart it
+        if (currentSongProgress > 3) {
+             console.log("[Store playPreviousSong] Restarting current song (over 3s played).");
              seekPlayerTo(0);
              return { currentSongProgress: 0, isPlaying: true }; // Update store state
+        } else {
+            // If less than 3 seconds, default behavior is often to restart anyway, or potentially go to actual previous if history was tracked.
+            // We'll just restart for now.
+            console.log("[Store playPreviousSong] Restarting current song (under 3s played).");
+             seekPlayerTo(0);
+             return { currentSongProgress: 0, isPlaying: true };
         }
 
-        // Otherwise, go to the previous song index
-        let prevIndex = currentQueueIndex - 1;
+         /* // --- More complex 'true previous' logic (requires history tracking, omitted for now) ---
+         // If less than 3 seconds, attempt to play the actual previous song from history
+         if (state.playHistory.length > 0) {
+             const previousSongFromHistory = state.playHistory.pop(); // Get last played song
+             const currentSong = queue[currentQueueIndex];
 
-        if (prevIndex < 0) {
-             console.log("[Store playPreviousSong] Reached beginning of queue.");
-            if (isLoopingPlaylist) {
-                console.log("[Store playPreviousSong] Looping playlist is ON. Wrapping to end (or rebuilding).");
-                 // Rebuild the queue to ensure correct order before wrapping
-                 const rebuiltQueue = _rebuildQueueFromContext(state);
-                 if (rebuiltQueue.length > 0) {
-                     prevIndex = rebuiltQueue.length - 1; // Wrap around to the last song of rebuilt queue
-                     const prevSong = rebuiltQueue[prevIndex];
-                     console.log(`[Store playPreviousSong] Wrapping: Playing song "${prevSong.title}" at index ${prevIndex}.`);
-                     return {
-                         queue: rebuiltQueue, // Use the rebuilt queue
-                         currentQueueIndex: prevIndex,
-                         isPlaying: true,
-                         currentSongProgress: 0,
-                         currentSongDuration: 0,
-                     };
-                 } else {
-                    console.warn("[Store playPreviousSong] Loop enabled but rebuilt queue is empty. Restarting current.");
-                    seekPlayerTo(0);
-                    return { currentSongProgress: 0, isPlaying: true };
-                 }
+             // Add current song back to the start of the *main* queue (it will be played after the history song)
+             const newQueue = [currentSong, ...queue];
+             // Put the song from history at the very beginning to play now
+             const queueWithHistory = [previousSongFromHistory, ...newQueue];
 
-            } else {
-                 console.log("[Store playPreviousSong] Looping playlist is OFF. Restarting first song.");
-                 seekPlayerTo(0);
-                 return { currentSongProgress: 0, isPlaying: true };
-            }
-        }
-
-        // If prevIndex is valid within the current queue
-        const prevSong = queue[prevIndex];
-        console.log(`[Store playPreviousSong] Playing previous song in queue: "${prevSong.title}" at index ${prevIndex}.`);
-        return {
-            currentQueueIndex: prevIndex,
-            isPlaying: true,
-            currentSongProgress: 0,
-            currentSongDuration: 0,
-        };
+             console.log(`[Store playPreviousSong] Playing previous song from history: "${previousSongFromHistory.title}"`);
+             return {
+                 queue: queueWithHistory,
+                 currentQueueIndex: 0, // Play the history song now
+                 isPlaying: true,
+                 currentSongProgress: 0,
+                 currentSongDuration: 0,
+                 playHistory: [...state.playHistory] // Update history (removed one)
+             };
+         } else {
+             // No history, just restart the current song
+             console.log("[Store playPreviousSong] No history, restarting current song.");
+             seekPlayerTo(0);
+             return { currentSongProgress: 0, isPlaying: true };
+         }
+         */
     }),
 
 
@@ -680,13 +687,13 @@ export const usePlaylistStore = create<PlaylistState>()(
 
         let newCurrentQueueIndex = -1;
         if (rebuiltQueue.length > 0) {
-            // Find the currently playing song in the *new* queue order
-            const currentSongId = state.queue[state.currentQueueIndex]?.id;
-            newCurrentQueueIndex = rebuiltQueue.findIndex(qSong => qSong.id === currentSongId);
+            // Find the currently playing song in the *new* queue order using queueId
+            const currentQueueId = state.queue[state.currentQueueIndex]?.queueId;
+            newCurrentQueueIndex = rebuiltQueue.findIndex(qSong => qSong.queueId === currentQueueId);
 
             // If the current song isn't found (shouldn't happen if context is valid), default to 0
             if (newCurrentQueueIndex === -1) {
-                console.warn(`[Store toggleShuffle] Current song ID ${currentSongId} not found in rebuilt queue. Defaulting to index 0.`);
+                console.warn(`[Store toggleShuffle] Current queue ID ${currentQueueId} not found in rebuilt queue. Defaulting to index 0.`);
                 newCurrentQueueIndex = 0;
             }
              console.log(`[Store toggleShuffle] Queue rebuilt with shuffle ${turningShuffleOn}. New index for current song: ${newCurrentQueueIndex}.`);
@@ -802,23 +809,25 @@ export const usePlaylistStore = create<PlaylistState>()(
 
          console.log(`[Store removeSongFromQueue] Removed song at index ${removedSongIndex}. New queue length: ${newQueue.length}`);
 
-         if (removedSongIndex === state.currentQueueIndex) {
+         // Adjust the currentQueueIndex based on the Spotify-like model (index 0 is always playing)
+         if (removedSongIndex === 0) { // If the currently playing song was removed
              console.log("[Store removeSongFromQueue] Removed the currently playing song.");
-            if (newQueue.length > 0) {
-               // Move to the song that is now at the *same index*
-               newCurrentQueueIndex = Math.min(state.currentQueueIndex, newQueue.length - 1);
-                if (newCurrentQueueIndex < 0) newCurrentQueueIndex = 0;
-               console.log(`[Store removeSongFromQueue] Moving to queue index ${newCurrentQueueIndex}.`);
-            } else {
-               newCurrentQueueIndex = -1;
-               newIsPlaying = false;
-               newContextId = null; // Clear context if queue becomes empty
-               console.log("[Store removeSongFromQueue] Queue became empty after removal.");
-            }
-         } else if (removedSongIndex < state.currentQueueIndex) {
-            // If a song *before* the current one was removed, decrement the current index
-            newCurrentQueueIndex--;
-             console.log(`[Store removeSongFromQueue] Adjusted current index down to ${newCurrentQueueIndex}.`);
+             if (newQueue.length > 0) {
+                 // The next song automatically becomes index 0
+                 newCurrentQueueIndex = 0;
+                 console.log(`[Store removeSongFromQueue] Moving to the new song at index 0.`);
+             } else {
+                 // Queue became empty
+                 newCurrentQueueIndex = -1;
+                 newIsPlaying = false;
+                 newContextId = null; // Clear context if queue becomes empty
+                 console.log("[Store removeSongFromQueue] Queue became empty after removal.");
+             }
+         } else {
+             // If a song *after* the current one was removed, the index doesn't need to change
+             // because the current song remains at index 0.
+             console.log("[Store removeSongFromQueue] Removed a song later in the queue. Current index remains 0.");
+             newCurrentQueueIndex = 0; // Explicitly set to 0, as it's the playing index
          }
 
           // Ensure index is valid after potential adjustments
@@ -827,7 +836,7 @@ export const usePlaylistStore = create<PlaylistState>()(
               newIsPlaying = false; // Stop playing if queue is empty
               newContextId = null;
           } else {
-               newCurrentQueueIndex = Math.max(0, Math.min(newCurrentQueueIndex, newQueue.length - 1));
+               newCurrentQueueIndex = 0; // Always 0 if queue is not empty
           }
 
 
@@ -836,9 +845,9 @@ export const usePlaylistStore = create<PlaylistState>()(
             currentQueueIndex: newCurrentQueueIndex,
             isPlaying: newIsPlaying,
             currentPlaylistContextId: newContextId,
-            // Reset progress/duration only if stopping playback or if the current song was removed
-            currentSongProgress: newIsPlaying ? (removedSongIndex === state.currentQueueIndex ? 0 : state.currentSongProgress) : 0,
-            currentSongDuration: newIsPlaying ? (removedSongIndex === state.currentQueueIndex ? 0 : state.currentSongDuration) : 0,
+            // Reset progress/duration only if stopping playback or if the current song was removed (index became 0 or -1)
+            currentSongProgress: newIsPlaying ? (removedSongIndex === 0 ? 0 : state.currentSongProgress) : 0,
+            currentSongDuration: newIsPlaying ? (removedSongIndex === 0 ? 0 : state.currentSongDuration) : 0,
          };
           console.log('[Store removeSongFromQueue] Finished. New state:', finalState);
          return finalState;
@@ -850,26 +859,24 @@ export const usePlaylistStore = create<PlaylistState>()(
             console.error(`[Store reorderSongInQueue] Invalid indices for queue reorder: from ${fromIndex}, to ${toIndex}`);
            return {};
          }
+         // Cannot move the currently playing song (index 0)
+         if (fromIndex === 0) {
+              console.warn("[Store reorderSongInQueue] Cannot reorder the currently playing song (index 0).");
+              return {};
+         }
+         // Cannot move a song to index 0
+         if (toIndex === 0) {
+              console.warn("[Store reorderSongInQueue] Cannot move a song to index 0.");
+              return {};
+         }
+
 
          const newQueue = Array.from(state.queue);
          const [movedItem] = newQueue.splice(fromIndex, 1);
          newQueue.splice(toIndex, 0, movedItem);
 
-         let newCurrentQueueIndex = state.currentQueueIndex;
-
-         if (state.currentQueueIndex === -1) {
-              console.log("[Store reorderSongInQueue] No song playing, only reordering queue data.");
-         } else if (state.currentQueueIndex === fromIndex) {
-             // If the currently playing song was moved
-           newCurrentQueueIndex = toIndex;
-           console.log(`[Store reorderSongInQueue] Moved current song. New index: ${newCurrentQueueIndex}`);
-         } else if (fromIndex < state.currentQueueIndex && toIndex >= state.currentQueueIndex) {
-           newCurrentQueueIndex--;
-           console.log(`[Store reorderSongInQueue] Moved song from before current to after. Adjusted index down: ${newCurrentQueueIndex}`);
-         } else if (fromIndex > state.currentQueueIndex && toIndex <= state.currentQueueIndex) {
-           newCurrentQueueIndex++;
-           console.log(`[Store reorderSongInQueue] Moved song from after current to before. Adjusted index up: ${newCurrentQueueIndex}`);
-         }
+         // The currentQueueIndex remains 0 because the currently playing song is never moved.
+         const newCurrentQueueIndex = 0;
 
          const finalState = { queue: newQueue, currentQueueIndex: newCurrentQueueIndex };
           console.log('[Store reorderSongInQueue] Finished. New state:', finalState);
@@ -882,7 +889,7 @@ export const usePlaylistStore = create<PlaylistState>()(
               console.error(`[Store playFromQueueIndex] Invalid queue index: ${index}. Queue length: ${state.queue.length}`);
               return {};
          }
-         if (index === state.currentQueueIndex && state.isPlaying) {
+         if (index === 0 && state.isPlaying) { // Check against index 0
              console.log("[Store playFromQueueIndex] Already playing this song. No change.");
              return {}; // Already playing this index
          }
@@ -890,8 +897,16 @@ export const usePlaylistStore = create<PlaylistState>()(
            const targetSong = state.queue[index];
            console.log(`[Store playFromQueueIndex] Playing song "${targetSong.title}" from queue index ${index}.`);
 
+           // Move the selected song to the front of the queue
+           const newQueue = [...state.queue];
+           const [playedSong] = newQueue.splice(index, 1);
+           newQueue.unshift(playedSong);
+
+           console.log(`[Store playFromQueueIndex] Moved song to index 0.`);
+
           const finalState = {
-             currentQueueIndex: index,
+             queue: newQueue,
+             currentQueueIndex: 0, // Always play from index 0
              isPlaying: true,
              currentSongProgress: 0,
              currentSongDuration: 0,
@@ -902,7 +917,7 @@ export const usePlaylistStore = create<PlaylistState>()(
 
     }),
     {
-      name: 'youtune-playlist-storage-v2', // Changed storage name due to context addition
+      name: 'youtune-playlist-storage-v3', // Incremented version for queue logic change
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         playlists: state.playlists,
@@ -916,9 +931,9 @@ export const usePlaylistStore = create<PlaylistState>()(
         currentPlaylistContextId: state.currentPlaylistContextId,
         currentPlaylistContextStartIndex: state.currentPlaylistContextStartIndex,
       }),
-      version: 2, // Increment version
+      version: 3, // Increment version for queue logic change
        migrate: (persistedState: any, version: number) => {
-         console.log(`[Store Migrate] Attempting migration from version ${version}. Current version: 2`);
+         console.log(`[Store Migrate] Attempting migration from version ${version}. Current version: 3`);
          if (version < 1) {
               console.log("[Store Migrate] Migrating from version < 1. No specific actions needed for base structure.");
          }
@@ -926,12 +941,21 @@ export const usePlaylistStore = create<PlaylistState>()(
               console.log("[Store Migrate] Migrating from version < 2. Adding default context fields.");
               persistedState.currentPlaylistContextId = null;
               persistedState.currentPlaylistContextStartIndex = 0;
-              // Optionally clear old queue/playback state if structure changed significantly
-              // persistedState.queue = [];
-              // persistedState.currentQueueIndex = -1;
+         }
+         if (version < 3) {
+              console.log("[Store Migrate] Migrating from version < 3. Resetting queue state due to logic change.");
+              // Reset queue and related playback state because the logic changed significantly
+              persistedState.queue = [];
+              persistedState.currentQueueIndex = -1;
+              persistedState.isPlaying = false;
+              persistedState.currentSongProgress = 0;
+              persistedState.currentSongDuration = 0;
+              // Keep context ID if valid, reset start index maybe? Or keep it.
+              // Let's keep context ID but reset start index as it's less relevant now.
+              persistedState.currentPlaylistContextStartIndex = 0;
          }
          // Add more migration steps for future versions here
-         // if (version < 3) { ... }
+         // if (version < 4) { ... }
 
          console.log("[Store Migrate] Migration finished.");
          return persistedState as PlaylistState;
@@ -966,7 +990,7 @@ export const usePlaylistStore = create<PlaylistState>()(
              });
              persistedState.playlists = dedupedPlaylists;
 
-            // Initialize/Reset transient state
+            // Initialize/Reset transient state (Queue, Playback)
             persistedState.queue = [];
             persistedState.currentQueueIndex = -1;
             persistedState.isPlaying = false;
@@ -1030,9 +1054,16 @@ export const setPlayerRef = (ref: React.RefObject<ReactPlayer>) => {
 };
 
 // --- Derived State Hook ---
+// Gets the *currently playing* song (always at index 0 if playing)
 export const useCurrentSong = () => {
-  return usePlaylistStore((state) => state.queue[state.currentQueueIndex] ?? null);
+  return usePlaylistStore((state) => state.queue[0] ?? null); // Index 0 is the current song
 };
+
+// Gets the *entire upcoming queue* (excluding the currently playing song)
+export const useUpcomingQueue = () => {
+  return usePlaylistStore((state) => state.queue.slice(1)); // All songs after index 0
+};
+
 
 // Hook to get the playlist context ID of the currently playing song
 export const useCurrentSongPlaylistContext = () => {
