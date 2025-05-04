@@ -13,20 +13,26 @@ const Slider = React.forwardRef<
   <SliderPrimitive.Root
     ref={ref}
     className={cn(
-      "relative flex w-full touch-none select-none items-center", // Added select-none here
+      "relative flex w-full touch-none select-none items-center group", // Added select-none and group
       className
     )}
     {...props}
   >
-    {/* Track: Use custom classes for background */}
-    <SliderPrimitive.Track className="relative h-full w-full grow overflow-hidden rounded-full bg-inherit">
+    {/* Track: Use custom classes for background, slightly thicker */}
+    <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-secondary">
        {/* Range: Use custom classes for filled part */}
-      <SliderPrimitive.Range className="absolute h-full bg-inherit" />
+      <SliderPrimitive.Range className="absolute h-full bg-primary group-hover:bg-accent transition-colors" />
     </SliderPrimitive.Track>
-    {/* Thumb: Use custom classes for the handle, ensure it's round */}
-    <SliderPrimitive.Thumb className={cn(
-        "block rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-        // Removed default size classes (like h-5 w-5) to allow sizing via parent component's CSS
+    {/* Thumb: Circular, scales on hover/active, initially less visible */}
+    <SliderPrimitive.Thumb
+      className={cn(
+        "block h-3 w-3 rounded-full border-2 border-primary bg-background ring-offset-background transition-all", // Base styles: circular, border
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", // Focus styles
+        "disabled:pointer-events-none disabled:opacity-50", // Disabled styles
+        "opacity-0 group-hover:opacity-100", // Fade in on slider hover
+        "group-active:scale-125", // Scale up when slider is active (dragging)
+        props.disabled && "opacity-50 group-hover:opacity-50", // Ensure disabled thumb doesn't become fully opaque on hover
+        !props.disabled && "cursor-pointer" // Add pointer cursor only when enabled
       )} />
   </SliderPrimitive.Root>
 ))

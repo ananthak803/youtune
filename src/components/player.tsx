@@ -137,10 +137,6 @@ export function Player() {
      }
   }, [currentSong, setCurrentSongProgress, setCurrentSongDuration]);
 
-  // Removed the useEffect that forced playerRef.current.seekTo(0)
-  // when currentSongProgress becomes 0 while playing. This might conflict
-  // with manual seeking and is generally handled by the player reacting to state.
-
 
  // --- Handlers ---
 
@@ -205,6 +201,8 @@ export function Player() {
      setSeeking(true);
      // Initialize local seek value with current progress
      setSeekValue(currentSongProgress);
+     // Prevent text selection during drag
+     document.body.style.userSelect = 'none';
   };
 
   // Update local seek value while dragging
@@ -231,6 +229,8 @@ export function Player() {
     setSeeking(false);
     setSeekValue(null); // Clear local seek value
     console.log("[Player Seek] Finished seek, reset seeking state.");
+    // Re-enable text selection
+    document.body.style.userSelect = '';
   };
 
 
@@ -336,13 +336,13 @@ export function Player() {
                 unoptimized // Added for ytimg URLs if not in next.config.js
                 onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
               />
-              <div className="overflow-hidden"> {/* Removed select-none here */}
+              <div className="overflow-hidden">
                 <p className="font-semibold truncate text-sm leading-tight">{currentSong.title || 'Unknown Title'}</p>
                 <p className="text-xs text-muted-foreground truncate">{currentSong.author || 'Unknown Artist'}</p>
               </div>
             </>
           ) : (
-             <div className="flex items-center gap-3 opacity-50"> {/* Removed select-none here */}
+             <div className="flex items-center gap-3 opacity-50">
               <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music text-muted-foreground"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
               </div>
@@ -428,21 +428,7 @@ export function Player() {
               value={[displayProgress]}
               max={Math.max(displayDuration, 1)} // Ensure max is at least 1 to prevent errors
               step={0.1}
-              className={cn(
-                "flex-1 h-1.5 group cursor-pointer", // Make track slightly thicker, add group for hover effects, cursor pointer
-                // Track styling
-                "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
-                // Range styling (filled part)
-                "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
-                // Thumb styles: Use direct size and border-radius for a circle
-                "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Base size, circular
-                "[&>button]:opacity-0", // Initially hidden
-                "[&>button]:transition-all [&>button]:duration-150",
-                currentSong && "[&>button]:opacity-100", // Visible if song playing
-                "group-hover:[&>button]:scale-125", // Scale up slightly on hover over the slider area
-                 seeking && "[&>button]:scale-150", // Scale up more when actively seeking
-                 !currentSong && "[&>button]:hidden" // Hide thumb if no song
-                )}
+              className={cn("flex-1", !currentSong && "opacity-50")} // Use base slider styles, slightly dimmer when no song
               onValueChange={handleSeekChange} // Changed to update local state only
               onPointerDown={handleSeekMouseDown}
               onPointerUp={handleSeekPointerUp} // Use pointer up for touch/mouse
@@ -499,19 +485,7 @@ export function Player() {
               value={[isMuted ? 0 : localVolume]}
               max={1}
               step={0.01}
-               className={cn(
-                 "h-1.5 group cursor-pointer", // Always visible width, group for hover, pointer cursor
-                 // Track styling
-                 "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
-                 // Range styling (filled part)
-                 "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
-                 // Thumb styles: Always visible, circular, scales up on hover/drag
-                 "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Base size, circular
-                 "[&>button]:opacity-100", // Always visible
-                 "[&>button]:transition-transform [&>button]:duration-150", // Smooth transition
-                 "hover:[&>button]:scale-125", // Scale up on hover over the slider area
-                 seeking && "[&>button]:scale-150" // Scale up more when dragging
-               )}
+              className="w-full" // Use base slider styles
               onValueChange={handleVolumeChange}
               aria-label="Volume"
             />
@@ -521,3 +495,4 @@ export function Player() {
     </footer>
   );
 }
+
