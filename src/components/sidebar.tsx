@@ -18,6 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"; // Import Dropdown components
 import { toast } from '@/hooks/use-toast'; // Import toast
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from "@/components/ui/tooltip";
 
 
 interface SidebarProps {
@@ -30,7 +36,7 @@ export function Sidebar({
   playlists,
   selectedPlaylistId,
   onSelectPlaylist,
-}: SidebarProps) {
+}: SidebarProps) { // <<< Potential missing closing brace was here
   const { createPlaylist, deletePlaylist } = usePlaylistStore((state) => ({
      createPlaylist: state.createPlaylist,
      deletePlaylist: state.deletePlaylist, // Get delete action
@@ -64,7 +70,7 @@ export function Sidebar({
     }
   };
 
-  return (
+  return ( // Ensure this return statement wraps the main JSX
     <aside className="w-64 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-full max-h-dvh"> {/* Use dVH */}
       {/* App Title */}
       <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1 select-none"> {/* Added select-none */}
@@ -152,4 +158,4 @@ export function Sidebar({
        />
     </aside>
   );
-}
+} // Closing brace for the Sidebar component function
