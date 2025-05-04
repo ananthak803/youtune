@@ -100,9 +100,8 @@ export function Sidebar({
   return (
     <aside className="w-64 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-full max-h-dvh select-none">
       {/* App Title */}
-      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1 select-none">
-          {/* Icon removed */}
-          <h1 className="text-xl font-bold text-primary">YouTune</h1>
+      <div className="flex items-center justify-center px-3 pt-2 pb-4 mb-1 select-none"> {/* Center content */}
+          <h1 className="text-xl font-bold text-primary text-center">YouTune</h1> {/* Centered and styled */}
       </div>
 
       {/* Create Playlist Button */}
@@ -197,3 +196,4 @@ export function Sidebar({
     </aside>
   );
 }
+
