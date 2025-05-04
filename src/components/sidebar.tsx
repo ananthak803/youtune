@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -139,7 +140,7 @@ export function Sidebar({
             </div>
           ))}
            {playlists.length === 0 && (
-             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center select-none">No playlists yet.</p> {/* Added select-none */}
+             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center select-none">No playlists yet.</p> // Added select-none
            )}
         </nav>
       </ScrollArea>
@@ -158,4 +159,4 @@ export function Sidebar({
        />
     </aside>
   );
-} // Closing brace for the Sidebar component function
+}
