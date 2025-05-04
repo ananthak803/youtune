@@ -2,7 +2,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import type { Playlist, Song, QueueSong } from '@/lib/types';
 import type ReactPlayer from 'react-player'; // Import type for playerRef
 import { toast } from '@/hooks/use-toast'; // Correct import for toast
@@ -222,17 +222,16 @@ export const usePlaylistStore = create<PlaylistState>()(
 
           // If the playlist being modified is the source of the *currently playing* song's context, add it to the queue
            const currentSong = state.queue[state.currentQueueIndex];
-           if (currentSong?.playlistContextId === playlistId) {
+           if (currentSong?.playlistContextId === playlistId && !state.isShuffling) { // Only add if not shuffling (shuffle adds all at once)
                const newQueueItem: QueueSong = {
                    ...song,
                    queueId: state._generateQueueId(),
                    playlistContextId: playlistId,
                };
                let updatedQueue = [...state.queue];
-               // Add after the current song if shuffle is off, otherwise add at the end?
-               // Let's add at the end for simplicity.
-               updatedQueue.push(newQueueItem);
-               console.log(`[Store] Added song ${song.id} to the end of the active queue because the current song is from the same playlist.`);
+               // Add after the current song if shuffle is off
+               updatedQueue.splice(state.currentQueueIndex + 1, 0, newQueueItem);
+               console.log(`[Store] Added song ${song.id} to the queue after current song.`);
                return { playlists: updatedPlaylists, queue: updatedQueue };
            }
 
@@ -381,10 +380,14 @@ export const usePlaylistStore = create<PlaylistState>()(
          if (state.isShuffling) {
              console.log("[Store] Shuffle is ON. Shuffling playlist before adding to queue.");
              const originalStartSong = songsToQueue[actualStartIndex];
-             songsToQueue = shuffleArray(songsToQueue);
-             actualStartIndex = songsToQueue.findIndex(s => s.id === originalStartSong.id);
-             if (actualStartIndex === -1) actualStartIndex = 0; // Fallback
-             console.log(`[Store] Shuffled queue. Original start song is now at index ${actualStartIndex}.`);
+             // Find the start song first
+             // Shuffle the rest
+             let restOfSongs = songsToQueue.filter((s, i) => i !== actualStartIndex);
+             restOfSongs = shuffleArray(restOfSongs);
+             // Combine: start song first, then shuffled rest
+             songsToQueue = [originalStartSong, ...restOfSongs];
+             actualStartIndex = 0; // Always start at index 0 when shuffling like this
+             console.log(`[Store] Shuffled queue. Start song "${originalStartSong.title}" is at index 0.`);
          }
 
          const newQueue: QueueSong[] = songsToQueue.map(song => ({
@@ -472,35 +475,38 @@ export const usePlaylistStore = create<PlaylistState>()(
             console.log("[Store] Reached end of queue.");
             if (isLoopingPlaylist) {
                 console.log("[Store] Looping playlist is ON.");
-                let newQueue = queue;
-                 let nextSongIndex = 0;
+                let newQueue = [...state.queue]; // Start with current queue
+                let nextSongIndex = 0;
 
-                 // If shuffle is also on, reshuffle the *entire original playlist content* and start again
-                 const originalPlaylistId = queue[0]?.playlistContextId; // Get context from first song
-                 if (isShuffling && originalPlaylistId) {
-                     console.log(`[Store] Reshuffling original playlist ${originalPlaylistId} for loop.`);
-                     const playlist = get().playlists.find(p => p.id === originalPlaylistId);
-                     if (playlist && playlist.songs.length > 0) {
-                         const shuffledSongs = shuffleArray(playlist.songs);
-                         newQueue = shuffledSongs.map(song => ({
-                             ...song,
-                             queueId: state._generateQueueId(),
-                             playlistContextId: originalPlaylistId,
-                         }));
-                         nextSongIndex = 0; // Start from the beginning of the newly shuffled queue
-                          console.log(`[Store] New shuffled queue created with ${newQueue.length} songs.`);
-                     } else {
-                         console.warn(`[Store] Could not find original playlist ${originalPlaylistId} or it's empty. Looping current queue instead.`);
-                         nextSongIndex = 0; // Fallback to looping current queue order
-                     }
-                 } else {
-                      console.log("[Store] Looping back to the start of the current queue order.");
-                     nextSongIndex = 0; // Loop back to the start of the current order
-                 }
+                // If shuffle is also on, reshuffle the *original playlist content* and start again
+                const originalPlaylistId = queue[0]?.playlistContextId; // Get context from first song
+                if (isShuffling && originalPlaylistId) {
+                    console.log(`[Store] Looping & Shuffling: Reshuffling original playlist ${originalPlaylistId}.`);
+                    const playlist = get().playlists.find(p => p.id === originalPlaylistId);
+                    if (playlist && playlist.songs.length > 0) {
+                        let songsToQueue = [...playlist.songs];
+                        // Shuffle the entire list
+                        songsToQueue = shuffleArray(songsToQueue);
+                        // Create the new queue from the fully shuffled list
+                        newQueue = songsToQueue.map(song => ({
+                            ...song,
+                            queueId: state._generateQueueId(),
+                            playlistContextId: originalPlaylistId,
+                        }));
+                        nextSongIndex = 0; // Start from the beginning of the newly shuffled queue
+                        console.log(`[Store] New shuffled queue created for loop with ${newQueue.length} songs.`);
+                    } else {
+                        console.warn(`[Store] Could not find original playlist ${originalPlaylistId} or it's empty. Looping current queue order instead.`);
+                        nextSongIndex = 0; // Fallback to looping current queue order
+                    }
+                } else {
+                    console.log("[Store] Looping back to the start of the current queue order.");
+                    nextSongIndex = 0; // Loop back to the start of the current order
+                }
                  const nextSong = newQueue[nextSongIndex];
                   console.log(`[Store] Looping: Playing song "${nextSong?.title}" at index ${nextSongIndex}.`);
                  return {
-                    queue: newQueue,
+                    queue: newQueue, // Update queue if reshuffled
                     currentQueueIndex: nextSongIndex,
                     isPlaying: true,
                     currentSongProgress: 0,
@@ -591,16 +597,11 @@ export const usePlaylistStore = create<PlaylistState>()(
           const turningShuffleOn = !state.isShuffling;
           console.log(`[Store] toggleShuffle triggered. Setting isShuffling to ${turningShuffleOn}`);
 
-          let newQueue = state.queue;
-          let newCurrentQueueIndex = state.currentQueueIndex;
+          // If turning shuffle OFF, we don't need to change the queue.
+          // If turning shuffle ON, we *could* reshuffle the upcoming part of the queue,
+          // but Spotify's behavior is generally to apply it on the *next context play*.
+          // Let's stick to the simpler approach: flag changes, applied on next `playPlaylist`.
 
-          // IMPORTANT: Toggling shuffle should ideally only affect *future* playback after the current song finishes
-          // or when playing a new context (playlist/album). It shouldn't immediately re-shuffle the *current* queue state
-          // if something is already playing, as that's confusing (Spotify behavior).
-          // Let's just toggle the flag. The shuffling logic will be applied when `playPlaylist` is called
-          // or potentially when looping with shuffle enabled.
-
-          // Minimal approach: Just toggle the flag.
            if (turningShuffleOn) {
                console.log("[Store] Shuffle is now ON. Will apply on next playlist play or loop reshuffle.");
            } else {
@@ -609,8 +610,6 @@ export const usePlaylistStore = create<PlaylistState>()(
 
           return {
               isShuffling: turningShuffleOn,
-              // queue: newQueue, // Don't change queue immediately
-              // currentQueueIndex: newCurrentQueueIndex, // Don't change index immediately
           };
        }),
 
@@ -802,6 +801,19 @@ export const usePlaylistStore = create<PlaylistState>()(
         isLoopingPlaylist: state.isLoopingPlaylist,
         // Don't persist playback state: queue, currentQueueIndex, isPlaying, currentSongProgress, currentSongDuration
       }),
+      version: 1, // Increment version if state shape changes significantly
+      migrate: (persistedState: any, version: number) => {
+        console.log(`[Store Migrate] Attempting migration from version ${version}. Current version: 1`);
+        if (version < 1) {
+            // Example migration: If older versions had different property names or structures
+             // persistedState.newPropertyName = persistedState.oldPropertyName;
+             // delete persistedState.oldPropertyName;
+             console.log("[Store Migrate] No specific migrations needed for version < 1.");
+        }
+        // Add more migration logic here for future versions
+        console.log("[Store Migrate] Migration finished.");
+        return persistedState as PlaylistState;
+      },
       onRehydrateStorage: (state) => {
         console.log("[Store] Hydration starting...");
         return (persistedState, error) => {
@@ -864,7 +876,7 @@ export const usePlaylistStore = create<PlaylistState>()(
           }
         };
       },
-      version: 1, // Increment version if state shape changes significantly
+
     }
   )
 );
