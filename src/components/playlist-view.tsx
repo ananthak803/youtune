@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Play, Pause, Trash2, GripVertical } from 'lucide-react'; // Import Pause
+import { Play, Pause, Trash2, GripVertical, Share2 } from 'lucide-react'; // Import Pause, Share2
 import {
   Table,
   TableBody,
@@ -16,33 +16,43 @@ import { Button } from '@/components/ui/button';
 import { usePlaylistStore } from '@/store/playlist-store';
 import type { Playlist, Song } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast'; // Import toast
 
 interface PlaylistViewProps {
   playlist: Playlist; // This is the playlist being *viewed*
+  // onShare: () => void; // Removed share handler prop
 }
 
 export function PlaylistView({ playlist }: PlaylistViewProps) {
   const {
-    playSong,
+    playSongInPlaylistContext, // Corrected function name
     removeSongFromPlaylist,
-    currentSong,
+    currentSong: currentSongFromStore, // Get the current song object
     isPlaying,
     reorderSongInPlaylist,
     playPlaylist,
-    currentSongPlaylistContextId, // Get the context ID
+    currentQueueIndex, // Get index to derive current song
+    queue, // Get queue to derive current song
     isShuffling,
     togglePlayPause, // Get toggle function
   } = usePlaylistStore((state) => ({
-    playSong: state.playSong,
+    playSongInPlaylistContext: state.playSongInPlaylistContext, // Corrected selector
     removeSongFromPlaylist: state.removeSongFromPlaylist,
-    currentSong: state.currentSong,
+    currentSong: state.queue[state.currentQueueIndex] ?? null, // Derive current song
     isPlaying: state.isPlaying,
     reorderSongInPlaylist: state.reorderSongInPlaylist,
     playPlaylist: state.playPlaylist,
-    currentSongPlaylistContextId: state.currentSongPlaylistContextId, // Get playing context
+    currentQueueIndex: state.currentQueueIndex,
+    queue: state.queue,
     isShuffling: state.isShuffling,
     togglePlayPause: state.togglePlayPause, // Get toggle
   }));
+
+   const { toast } = useToast(); // Use the toast hook
+
+  const currentSong = queue[currentQueueIndex] ?? null;
+  const currentSongPlaylistContextId = usePlaylistStore(state => state.queue[state.currentQueueIndex]?.playlistContextId ?? null);
+
 
   const [draggedItemIndex, setDraggedItemIndex] = React.useState<number | null>(null);
 
@@ -60,12 +70,13 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
     if (currentSong?.id === song.id && currentSongPlaylistContextId === playlist.id) {
         togglePlayPause();
     } else {
-        playSong(song, playlist.id); // Otherwise, play the song in this playlist's context
+        playSongInPlaylistContext(song, playlist.id); // Otherwise, play the song in this playlist's context
     }
   };
 
   const handleRemoveSong = (songId: string) => {
     removeSongFromPlaylist(playlist.id, songId);
+    toast({ title: 'Song Removed', description: 'The song has been removed from the playlist.' });
   };
 
   // Drag and Drop Handlers
@@ -142,6 +153,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
                 )}
              </Button>
           )}
+           {/* Removed Share Button */}
       </div>
       {playlist.songs.length === 0 ? (
         <p className="text-muted-foreground">This playlist is empty. Add some songs!</p>
