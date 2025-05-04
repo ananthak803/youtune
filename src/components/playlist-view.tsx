@@ -130,7 +130,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
   const isCurrentlyPlayingPlaylist = currentSongPlaylistContextId === playlist.id;
 
 
-  return (
+  return ( // Ensure this return statement wraps the main JSX
     <div className="mt-8">
       <div className="flex items-center gap-4 mb-6 select-none"> {/* Added select-none */}
           <h2 className="text-3xl font-bold">{playlist.name}</h2>
@@ -152,7 +152,7 @@ export function PlaylistView({ playlist }: PlaylistViewProps) {
           )}
       </div>
       {playlist.songs.length === 0 ? (
-        <p className="text-muted-foreground select-none">This playlist is empty. Add some songs!</p> {/* Added select-none */}
+        <p className="text-muted-foreground select-none">This playlist is empty. Add some songs!</p> // Added select-none
       ) : (
         <Table>
           <TableHeader>
