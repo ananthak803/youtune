@@ -30,4 +30,5 @@ export interface YoutubeVideoMetadata {
 // Represents a song within the playback queue
 export interface QueueSong extends Song {
   queueId: string; // Unique identifier for this instance in the queue
+  playlistContextId?: string; // Optional: ID of the playlist this song instance belongs to in the queue
 }
