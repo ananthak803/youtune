@@ -2,14 +2,23 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, ListMusic } from 'lucide-react';
+import { Plus, ListMusic, MoreHorizontal, Trash2 } from 'lucide-react'; // Added icons
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { Playlist } from '@/lib/types';
 import { CreatePlaylistDialog } from './create-playlist-dialog';
+import { DeletePlaylistDialog } from './delete-playlist-dialog'; // Import Delete dialog
 import { usePlaylistStore } from '@/store/playlist-store';
-import { Separator } from '@/components/ui/separator'; // Import Separator
+import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"; // Import Dropdown components
+import { toast } from '@/hooks/use-toast'; // Import toast
+
 
 interface SidebarProps {
   playlists: Playlist[];
@@ -22,28 +31,52 @@ export function Sidebar({
   selectedPlaylistId,
   onSelectPlaylist,
 }: SidebarProps) {
-  const createPlaylist = usePlaylistStore((state) => state.createPlaylist);
+  const { createPlaylist, deletePlaylist } = usePlaylistStore((state) => ({
+     createPlaylist: state.createPlaylist,
+     deletePlaylist: state.deletePlaylist, // Get delete action
+   }));
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false); // State for delete dialog
+  const [playlistToDelete, setPlaylistToDelete] = React.useState<Playlist | null>(null); // State for playlist to delete
 
   const handleCreatePlaylist = (name: string) => {
     if (name.trim()) {
       createPlaylist(name.trim());
       setIsCreateDialogOpen(false); // Close dialog after creation
+       toast({ title: 'Playlist Created', description: `"${name.trim()}" has been created.` });
+    }
+  };
+
+  // Open the delete confirmation dialog
+  const openDeleteDialog = (playlist: Playlist) => {
+    setPlaylistToDelete(playlist);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Handle the actual deletion after confirmation
+  const handleConfirmDelete = () => {
+    if (playlistToDelete) {
+       const deletedName = playlistToDelete.name;
+      deletePlaylist(playlistToDelete.id);
+      setIsDeleteDialogOpen(false);
+      setPlaylistToDelete(null);
+      toast({ title: 'Playlist Deleted', description: `"${deletedName}" has been deleted.`, variant: 'destructive' });
     }
   };
 
   return (
-    <aside className="w-60 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-screen"> {/* Use sidebar theme, adjust width/padding */}
+    <aside className="w-64 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-full max-h-dvh"> {/* Use dVH */}
       {/* App Title */}
-      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1"> {/* Reduced mb */}
-          <h1 className="text-xl font-bold text-primary">YouTune</h1> {/* Use Primary text color */}
+      <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><circle cx="12" cy="12" r="10"/><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <h1 className="text-xl font-bold text-primary">YouTune</h1>
       </div>
 
-      {/* Create Playlist Button at Top */}
-      <div className="px-1 mb-3"> {/* Added padding and margin */}
+      {/* Create Playlist Button */}
+      <div className="px-1 mb-3">
          <Button
-            variant="outline"
-            className="w-full justify-start h-9 rounded-md text-sm border-sidebar-border text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-accent" // Match playlist item style, adjust border
+            variant="ghost" // More subtle variant
+            className="w-full justify-start h-9 rounded-md text-sm border border-sidebar-border text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-accent"
             onClick={() => setIsCreateDialogOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -51,46 +84,72 @@ export function Sidebar({
           </Button>
       </div>
 
-      {/* Separator */}
-       <Separator className="mb-3 bg-sidebar-border" /> {/* Added margin-bottom */}
+      <Separator className="mb-3 bg-sidebar-border" />
 
       {/* Playlist List */}
-      <ScrollArea className="flex-1"> {/* Remove mb-3 here */}
-        <nav className="flex flex-col gap-1 px-1"> {/* Adjust padding */}
+      <ScrollArea className="flex-1 -mx-1"> {/* Negative margin to offset button padding */}
+        <nav className="flex flex-col gap-1 px-1 py-1">
           {playlists.map((playlist) => (
-            <Button
-              key={playlist.id}
-              // Use sidebar-accent for selected background
-              variant={selectedPlaylistId === playlist.id ? 'secondary' : 'ghost'}
-              className={cn(
-                'w-full justify-start h-9 rounded-md text-sm', // Slightly smaller height, standard rounding
-                selectedPlaylistId === playlist.id
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' // Use sidebar specific colors
-                    : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80', // Adjust hover and default text
-                'truncate'
-              )}
-              onClick={() => onSelectPlaylist(playlist)}
-            >
-              <ListMusic className="mr-2 h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{playlist.name}</span>
-            </Button>
+            <div key={playlist.id} className="group relative flex items-center w-full">
+              <Button
+                variant={selectedPlaylistId === playlist.id ? 'secondary' : 'ghost'}
+                className={cn(
+                  'w-full justify-start h-9 rounded-md text-sm pl-3 pr-8', // Added padding for icon
+                  selectedPlaylistId === playlist.id
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                      : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80',
+                  'truncate'
+                )}
+                onClick={() => onSelectPlaylist(playlist)}
+                title={playlist.name} // Tooltip for long names
+              >
+                <ListMusic className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate flex-1">{playlist.name}</span>
+              </Button>
+              {/* Dropdown Menu for actions */}
+               <DropdownMenu>
+                 <DropdownMenuTrigger asChild>
+                   <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                      aria-label={`More options for ${playlist.name}`}
+                    >
+                     <MoreHorizontal className="h-4 w-4" />
+                   </Button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent side="right" align="start">
+                   {/* <DropdownMenuItem>
+                       <Pencil className="mr-2 h-4 w-4" /> Rename (Not Implemented)
+                   </DropdownMenuItem> */}
+                   <DropdownMenuItem
+                     className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                     onClick={() => openDeleteDialog(playlist)}
+                   >
+                     <Trash2 className="mr-2 h-4 w-4" /> Delete
+                   </DropdownMenuItem>
+                 </DropdownMenuContent>
+               </DropdownMenu>
+            </div>
           ))}
            {playlists.length === 0 && (
-             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center">No playlists yet.</p> // Adjusted text style
+             <p className="text-xs text-sidebar-foreground/60 px-2 mt-2 text-center">No playlists yet.</p>
            )}
         </nav>
       </ScrollArea>
 
-      {/* Removed bottom create button section */}
-      {/* <Separator className="my-2 bg-sidebar-border" /> */}
-      {/* <div className="mt-auto pb-1 px-1"> ... </div> */}
-
-
+      {/* Dialogs */}
        <CreatePlaylistDialog
         isOpen={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         onCreate={handleCreatePlaylist}
       />
+       <DeletePlaylistDialog
+         isOpen={isDeleteDialogOpen}
+         onOpenChange={setIsDeleteDialogOpen}
+         playlistName={playlistToDelete?.name}
+         onConfirm={handleConfirmDelete}
+       />
     </aside>
   );
 }
