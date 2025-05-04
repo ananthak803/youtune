@@ -1,3 +1,4 @@
+
 // src/components/add-song-form.tsx
 'use client';
 
@@ -21,7 +22,7 @@ import { extractYoutubeVideoId } from '@/services/youtube'; // Helper to get vid
 import type { Song, Playlist, YoutubeVideoMetadata } from '@/lib/types';
 import { usePlaylistStore } from '@/store/playlist-store';
 import { SelectPlaylistDialog } from './select-playlist-dialog';
-import { Plus, Play, Loader2, Youtube, Music } from 'lucide-react'; // Import necessary icons
+import { Plus, Play, Loader2, Youtube, Music, Link as LinkIcon } from 'lucide-react'; // Import necessary icons
 
 // Schema for the URL input form
 const addSongSchema = z.object({
@@ -36,7 +37,11 @@ const addSongSchema = z.object({
 
 type AddSongFormValues = z.infer<typeof addSongSchema>;
 
-export function AddSongForm() {
+interface AddSongFormProps {
+  onSongAdded?: () => void; // Optional callback for when a song is successfully added/played
+}
+
+export function AddSongForm({ onSongAdded }: AddSongFormProps) {
   const { toast } = useToast();
   const { playlists, addSongToPlaylist, playSingleSong } = usePlaylistStore((state) => ({
     playlists: state.playlists,
@@ -72,7 +77,9 @@ export function AddSongForm() {
 
     try {
       // Use the server action to fetch metadata (requires API key)
+      console.log(`[AddSongForm] Fetching metadata for video ID: ${videoId}`);
       const metadata: YoutubeVideoMetadata = await getYoutubeMetadataAction(videoId);
+      console.log(`[AddSongForm] Metadata received:`, metadata);
       const song: Song = {
         id: videoId,
         title: metadata.title,
@@ -82,11 +89,19 @@ export function AddSongForm() {
       };
       return song;
     } catch (error: any) {
-      console.error('Error fetching metadata via action:', error);
-      // Display user-friendly error messages based on the action's throw
+      console.error('[AddSongForm] Error fetching metadata via action:', error);
+      let description = 'Could not fetch video details.';
+      if (error instanceof Error) {
+          // Use the specific error message if available
+          description = error.message;
+           // Check for specific API key error from the action
+           if (error.message.includes('Server configuration error') || error.message.includes('API key is missing')) {
+             description = 'Metadata fetch unavailable due to server configuration. Please check the API key.';
+           }
+      }
       toast({
         title: 'Error Fetching Video Info',
-        description: error.message || 'Could not fetch video details.',
+        description: description,
         variant: 'destructive',
       });
       return null; // Indicate failure
@@ -116,6 +131,7 @@ export function AddSongForm() {
       // Add directly to the only playlist
       addSongToSpecificPlaylist(playlists[0].id, preparedSong);
       form.reset(); // Clear form after successful add
+      onSongAdded?.(); // Call callback if provided
     } else {
       // Open dialog to select playlist
       setIsSelectPlaylistDialogOpen(true);
@@ -129,6 +145,7 @@ export function AddSongForm() {
 
     playSingleSong(preparedSong); // Play the song directly
     form.reset(); // Clear form after playing
+    onSongAdded?.(); // Call callback if provided
   };
 
   // --- Playlist Selection Logic ---
@@ -138,8 +155,9 @@ export function AddSongForm() {
     if (songToAdd) {
       addSongToSpecificPlaylist(playlistId, songToAdd);
       form.reset(); // Clear form after successful selection and add
+      onSongAdded?.(); // Call callback if provided
     } else {
-      console.error("Error: No song data available when playlist was selected.");
+      console.error("[AddSongForm] Error: No song data available when playlist was selected.");
       toast({ title: "Error", description: "Could not add song. Please try again.", variant: "destructive" });
       setIsSelectPlaylistDialogOpen(false); // Ensure dialog closes on error
       setSongToAdd(null);
@@ -162,85 +180,81 @@ export function AddSongForm() {
 
   return (
     <>
-      <div className="mb-6 rounded-lg border bg-card p-4 shadow-sm">
-        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Youtube className="h-5 w-5 text-destructive" /> {/* YouTube Icon */}
-            Add Song from YouTube URL
-        </h3>
-        <Form {...form}>
-          <form
-            // Separate handlers for each button based on which was clicked
-            // onSubmit is not used directly on the form tag
-            className="flex flex-col sm:flex-row items-start sm:items-center gap-2"
-          >
-            <FormField
-              control={form.control}
-              name="url"
-              render={({ field }) => (
-                <FormItem className="flex-1 w-full sm:w-auto">
-                  <FormLabel className="sr-only">YouTube URL</FormLabel>
-                  <FormControl>
+      {/* Removed the surrounding Card/div - this form is now intended to be placed inside a Dialog */}
+      <Form {...form}>
+        <form
+          // onSubmit is not used directly on the form tag
+          className="flex flex-col sm:flex-row items-start sm:items-center gap-2"
+        >
+          <FormField
+            control={form.control}
+            name="url"
+            render={({ field }) => (
+              <FormItem className="flex-1 w-full sm:w-auto">
+                <FormLabel className="sr-only">YouTube URL</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Paste YouTube video URL..."
                       {...field}
                       disabled={isLoading}
                       aria-label="YouTube URL Input"
-                      className="h-9" // Keep input height consistent
+                      className="h-9 pl-8" // Add padding for icon
                     />
-                  </FormControl>
-                  <FormMessage className="mt-1 text-xs" /> {/* Adjust message spacing */}
-                </FormItem>
+                  </div>
+                </FormControl>
+                <FormMessage className="mt-1 text-xs" />
+              </FormItem>
+            )}
+          />
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
+            {/* Add to Playlist Button */}
+            <Button
+              type="button"
+              onClick={form.handleSubmit(onAddToPlaylist)}
+              disabled={isLoading || !form.formState.isValid}
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-initial"
+              aria-label="Add song to playlist"
+            >
+              {isLoading ? (
+                <Loader2 className="animate-spin h-4 w-4" />
+              ) : (
+                <Plus className="h-4 w-4" />
               )}
-            />
-            <div className="flex gap-2 w-full sm:w-auto justify-end">
-              {/* Add to Playlist Button */}
-              <Button
-                type="button" // Important: type="button" to prevent form submission
-                onClick={form.handleSubmit(onAddToPlaylist)}
-                disabled={isLoading || !form.formState.isValid}
-                variant="outline"
-                size="sm"
-                className="flex-1 sm:flex-initial" // Allow grow on mobile
-                aria-label="Add song to playlist"
-              >
-                {isLoading ? (
-                  <Loader2 className="animate-spin h-4 w-4" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                <span className="ml-2 hidden sm:inline">Add to Playlist</span>
-                 <span className="ml-2 sm:hidden">Add</span> {/* Shorter text for mobile */}
-              </Button>
+              <span className="ml-2 hidden sm:inline">Add to Playlist</span>
+              <span className="ml-2 sm:hidden">Add</span>
+            </Button>
 
-              {/* Play Now Button */}
-              <Button
-                type="button" // Important: type="button"
-                onClick={form.handleSubmit(onPlayNow)}
-                disabled={isLoading || !form.formState.isValid}
-                variant="secondary" // Different visual style
-                size="sm"
-                className="flex-1 sm:flex-initial" // Allow grow on mobile
-                aria-label="Play song now"
-              >
-                {isLoading ? (
-                  <Loader2 className="animate-spin h-4 w-4" />
-                ) : (
-                  <Play className="h-4 w-4 fill-current" /> // Play icon
-                )}
-                 <span className="ml-2 hidden sm:inline">Play Now</span>
-                 <span className="ml-2 sm:hidden">Play</span> {/* Shorter text for mobile */}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </div>
+            {/* Play Now Button */}
+            <Button
+              type="button"
+              onClick={form.handleSubmit(onPlayNow)}
+              disabled={isLoading || !form.formState.isValid}
+              variant="secondary"
+              size="sm"
+              className="flex-1 sm:flex-initial"
+              aria-label="Play song now"
+            >
+              {isLoading ? (
+                <Loader2 className="animate-spin h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4 fill-current" />
+              )}
+              <span className="ml-2 hidden sm:inline">Play Now</span>
+              <span className="ml-2 sm:hidden">Play</span>
+            </Button>
+          </div>
+        </form>
+      </Form>
 
       {/* Playlist Selection Dialog */}
       <SelectPlaylistDialog
         isOpen={isSelectPlaylistDialogOpen}
         onOpenChange={(open) => {
           setIsSelectPlaylistDialogOpen(open);
-          // Clear songToAdd if the dialog is closed without selection
           if (!open) {
             setSongToAdd(null);
           }
