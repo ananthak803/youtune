@@ -432,7 +432,7 @@ export function Player() {
                 "flex-1 h-1.5 group cursor-pointer", // Make track slightly thicker, add group for hover effects, cursor pointer
                 // Track styling
                 "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
-                // Range styling
+                // Range styling (filled part)
                 "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
                 // Thumb styles: Always visible if song exists, small size, scales up on hover/seek
                 "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Smaller base size
@@ -503,7 +503,7 @@ export function Player() {
                  "h-1.5 group cursor-pointer", // Always visible width, group for hover, pointer cursor
                  // Track styling
                  "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
-                 // Range styling
+                 // Range styling (filled part)
                  "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
                  // Thumb styles: Always visible, small size, scales up on hover/drag
                  "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Smaller base size
@@ -521,5 +521,3 @@ export function Player() {
     </footer>
   );
 }
-
-    
