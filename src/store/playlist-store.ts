@@ -231,9 +231,18 @@ export const usePlaylistStore = create<PlaylistState>()(
                    updatedQueue.splice(insertIndex, 0, newQueueItem);
                    console.log(`[Store] Added song ${song.id} randomly to the queue after current song (shuffle on). Inserted at index ${insertIndex}.`);
                 } else {
-                    // If shuffle is OFF, add the new song linearly into the queue right after the current song.
-                    updatedQueue.splice(state.currentQueueIndex + 1, 0, newQueueItem);
-                    console.log(`[Store] Added song ${song.id} linearly to the queue after current song. Inserted at index ${state.currentQueueIndex + 1}.`);
+                    // If shuffle is OFF, find the position of the last song from this playlist context in the queue
+                    let lastPlaylistSongIndex = -1;
+                    for (let i = updatedQueue.length - 1; i >= 0; i--) {
+                        if (updatedQueue[i].playlistContextId === playlistId) {
+                            lastPlaylistSongIndex = i;
+                            break;
+                        }
+                    }
+                    // Insert after the last song of this context, or at the end if none found (shouldn't happen if context matches)
+                    const insertIndex = lastPlaylistSongIndex !== -1 ? lastPlaylistSongIndex + 1 : updatedQueue.length;
+                    updatedQueue.splice(insertIndex, 0, newQueueItem);
+                    console.log(`[Store] Added song ${song.id} linearly to the queue in playlist context. Inserted at index ${insertIndex}.`);
                 }
                return { playlists: updatedPlaylists, queue: updatedQueue };
            }
@@ -460,7 +469,7 @@ export const usePlaylistStore = create<PlaylistState>()(
           return finalState;
       }),
 
-     playNextSong: () => set((state) => {
+      playNextSong: () => set((state) => {
         console.log("[Store] playNextSong triggered.");
         const { queue, currentQueueIndex, isLooping, isLoopingPlaylist, isShuffling } = state;
         if (queue.length === 0) {
@@ -468,81 +477,82 @@ export const usePlaylistStore = create<PlaylistState>()(
             return { isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 };
         }
 
-        const currentSong = queue[currentQueueIndex];
-
         // 1. Handle single song loop
-        if (isLooping && currentSong) {
+        if (isLooping && state.currentQueueIndex !== -1) {
             console.log("[Store] Looping current song.");
-             return { currentSongProgress: 0, isPlaying: true };
+            return { currentSongProgress: 0, isPlaying: true }; // Restart current song
         }
 
-        // 2. Calculate next index
+        // 2. Calculate next logical index
         let nextIndex = currentQueueIndex + 1;
 
-        // 3. Handle end of queue
-        if (nextIndex >= queue.length) {
-            console.log("[Store] Reached end of queue.");
-            if (isLoopingPlaylist) {
-                console.log("[Store] Looping playlist is ON.");
-                let newQueue = [...state.queue]; // Start with current queue for non-shuffle case
-                let nextSongIndex = 0;
+        // 3. Check if next index is within the current queue bounds
+        if (nextIndex < queue.length) {
+            const nextSong = queue[nextIndex];
+            console.log(`[Store] Playing next song in queue: "${nextSong.title}" at index ${nextIndex}.`);
+            return {
+                currentQueueIndex: nextIndex,
+                isPlaying: true,
+                currentSongProgress: 0,
+                currentSongDuration: 0,
+            };
+        }
 
-                // If shuffle is also ON, reshuffle the *original playlist content* and create a *new* queue
-                const originalPlaylistId = queue[0]?.playlistContextId; // Get context from first song
-                if (isShuffling && originalPlaylistId) {
-                    console.log(`[Store] Looping & Shuffling: Reshuffling original playlist ${originalPlaylistId}.`);
-                    const playlist = get().playlists.find(p => p.id === originalPlaylistId);
-                    if (playlist && playlist.songs.length > 0) {
-                        let songsToQueue = [...playlist.songs];
-                        songsToQueue = shuffleArray(songsToQueue);
-                        newQueue = songsToQueue.map(song => ({
-                            ...song,
-                            queueId: state._generateQueueId(),
-                            playlistContextId: originalPlaylistId,
-                        }));
-                        nextSongIndex = 0; // Always start at the beginning of the newly shuffled queue
-                        console.log(`[Store] New shuffled queue created for loop with ${newQueue.length} songs.`);
-                    } else {
-                        console.warn(`[Store] Could not find original playlist ${originalPlaylistId} or it's empty. Cannot reshuffle. Stopping.`);
-                         return { isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 }; // Stop if can't reshuffle
-                    }
+        // 4. Reached the end of the current queue
+        console.log("[Store] Reached end of queue.");
+        if (isLoopingPlaylist) {
+            console.log("[Store] Looping playlist is ON.");
+            let newQueue = [...state.queue]; // Start with current queue
+            let nextSongIndex = 0; // Default to looping back to the start
+
+            // Check if shuffle is also ON and there's a playlist context
+            const originalPlaylistId = queue[0]?.playlistContextId; // Assuming all songs in queue share context
+            if (isShuffling && originalPlaylistId) {
+                console.log(`[Store] Looping & Shuffling: Reshuffling original playlist ${originalPlaylistId}.`);
+                const playlist = get().playlists.find(p => p.id === originalPlaylistId);
+                if (playlist && playlist.songs.length > 0) {
+                    let songsToQueue = shuffleArray([...playlist.songs]);
+                    newQueue = songsToQueue.map(song => ({
+                        ...song,
+                        queueId: state._generateQueueId(),
+                        playlistContextId: originalPlaylistId,
+                    }));
+                    nextSongIndex = 0; // Start at the beginning of the newly shuffled queue
+                    console.log(`[Store] New shuffled queue created for loop with ${newQueue.length} songs.`);
                 } else {
-                     console.log("[Store] Looping back to the start of the current queue order (shuffle off).");
-                     nextSongIndex = 0; // Loop to the beginning of the existing queue
+                    console.warn(`[Store] Could not find original playlist ${originalPlaylistId} or it's empty. Cannot reshuffle. Stopping.`);
+                    return { isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 };
                 }
-                 const nextSong = newQueue[nextSongIndex];
-                  console.log(`[Store] Looping: Playing song "${nextSong?.title}" at index ${nextSongIndex}.`);
-                 return {
-                    queue: newQueue, // Update queue only if reshuffled
-                    currentQueueIndex: nextSongIndex,
-                    isPlaying: true,
-                    currentSongProgress: 0,
-                    currentSongDuration: 0,
-                };
-
             } else {
-                console.log("[Store] Looping playlist is OFF. Reached end. Stopping playback.");
-                return {
-                    isPlaying: false,
-                     // Optionally reset index or keep it at the end? Resetting seems safer.
-                     currentQueueIndex: -1,
+                console.log("[Store] Looping back to the start of the current queue order (shuffle off).");
+                nextSongIndex = 0; // Loop to the beginning
+            }
+
+            if (newQueue.length > 0) {
+                 const nextSong = newQueue[nextSongIndex];
+                 console.log(`[Store] Looping: Playing song "${nextSong?.title}" at index ${nextSongIndex}.`);
+                 return {
+                     queue: newQueue, // Update queue only if reshuffled
+                     currentQueueIndex: nextSongIndex,
+                     isPlaying: true,
                      currentSongProgress: 0,
                      currentSongDuration: 0,
                  };
+            } else {
+                 console.warn("[Store] Loop enabled but new queue is empty. Stopping playback.");
+                 return { isPlaying: false, currentQueueIndex: -1, currentSongProgress: 0, currentSongDuration: 0 };
             }
+
+        } else {
+            console.log("[Store] Looping playlist is OFF. Reached end. Stopping playback.");
+            return {
+                isPlaying: false,
+                currentQueueIndex: -1, // Reset index
+                currentSongProgress: 0,
+                currentSongDuration: 0,
+            };
         }
-
-        // 4. Play the next song in the current queue order
-        const nextSong = queue[nextIndex];
-        console.log(`[Store] Playing next song in queue: "${nextSong.title}" at index ${nextIndex}.`);
-        return {
-            currentQueueIndex: nextIndex,
-            isPlaying: true,
-            currentSongProgress: 0,
-            currentSongDuration: 0,
-        };
     }),
-
 
     playPreviousSong: () => set((state) => {
         console.log("[Store] playPreviousSong triggered.");
@@ -555,7 +565,9 @@ export const usePlaylistStore = create<PlaylistState>()(
         // If more than 3 seconds into the song, restart it
         if (currentSongProgress > 3) {
              console.log("[Store] Restarting current song (progress > 3s).");
-             return { currentSongProgress: 0, isPlaying: true };
+             // Tell player to seek to 0
+              seekPlayerTo(0);
+             return { currentSongProgress: 0, isPlaying: true }; // Update store state
         }
 
         // Otherwise, go to the previous song index
@@ -568,11 +580,13 @@ export const usePlaylistStore = create<PlaylistState>()(
                 prevIndex = queue.length - 1; // Wrap around to the last song
                 if (prevIndex < 0) { // Handle case of empty or single-song queue loop attempt
                   console.warn("[Store] Cannot wrap to previous in empty/single-song queue.");
-                  return { currentSongProgress: 0, isPlaying: true }; // Just restart
+                  seekPlayerTo(0); // Just restart
+                  return { currentSongProgress: 0, isPlaying: true };
                 }
             } else {
                  console.log("[Store] Looping playlist is OFF. Restarting first song.");
-                 // Effectively restart the current (first) song
+                 // Seek player to 0 and ensure store state reflects this
+                 seekPlayerTo(0);
                  return { currentSongProgress: 0, isPlaying: true };
             }
         }
@@ -617,31 +631,30 @@ export const usePlaylistStore = create<PlaylistState>()(
 
         // Get the currently playing song
         const currentSong = state.queue[state.currentQueueIndex];
+        if (!currentSong) {
+             console.warn("[Store] Shuffle toggle: currentQueueIndex set but no currentSong found? Resetting.");
+             return { isShuffling: turningShuffleOn, queue: [], currentQueueIndex: -1, isPlaying: false };
+        }
 
         if (turningShuffleOn) {
             console.log("[Store] Shuffle is turning ON.");
-            // Keep current song, shuffle the rest *of the current queue*
-            if (currentSong) {
-                let otherSongs = state.queue.filter((_, index) => index !== state.currentQueueIndex);
-                otherSongs = shuffleArray(otherSongs);
-                // Put current song at the beginning of the new queue order
-                newQueue = [currentSong, ...otherSongs];
-                newCurrentQueueIndex = 0; // Current song is now at index 0
-                console.log(`[Store] Shuffled remaining queue. Current song "${currentSong.title}" moved to index 0.`);
-            } else {
-                // This case should ideally not happen if currentQueueIndex !== -1
-                console.warn("[Store] Shuffle ON: currentQueueIndex set but no currentSong found?");
-                newQueue = shuffleArray(state.queue); // Shuffle the whole queue as fallback
-                newCurrentQueueIndex = 0; // Reset index
-            }
+            // Get the rest of the queue (excluding the current song)
+            let otherSongs = state.queue.filter((_, index) => index !== state.currentQueueIndex);
+            // Shuffle the rest
+            otherSongs = shuffleArray(otherSongs);
+            // Put current song at the beginning of the new queue order
+            newQueue = [currentSong, ...otherSongs];
+            newCurrentQueueIndex = 0; // Current song is now at index 0
+            console.log(`[Store] Shuffled remaining queue. Current song "${currentSong.title}" moved to index 0.`);
+
         } else {
             console.log("[Store] Shuffle is turning OFF.");
             // Restore original playlist order IF context is available
-             const originalPlaylistId = currentSong?.playlistContextId;
+             const originalPlaylistId = currentSong.playlistContextId;
 
             if (originalPlaylistId) {
                  const originalPlaylist = get().playlists.find(p => p.id === originalPlaylistId);
-                 if (originalPlaylist) {
+                 if (originalPlaylist && originalPlaylist.songs.length > 0) {
                      console.log(`[Store] Restoring original order from playlist "${originalPlaylist.name}".`);
                      // Find the index of the current song in the *original* playlist
                      const originalIndex = originalPlaylist.songs.findIndex(s => s.id === currentSong.id);
@@ -649,7 +662,8 @@ export const usePlaylistStore = create<PlaylistState>()(
                          // Create the new queue based on the original playlist order
                          newQueue = originalPlaylist.songs.map(song => ({
                              ...song,
-                             queueId: song.id === currentSong.id ? currentSong.queueId : state._generateQueueId(), // Keep current queueId, generate for others
+                             // Attempt to reuse queueId if the song is already in the current queue, otherwise generate new
+                             queueId: state.queue.find(q => q.id === song.id)?.queueId ?? state._generateQueueId(),
                              playlistContextId: originalPlaylistId,
                          }));
                          // Set the index to the current song's position in the *original* order
@@ -657,15 +671,15 @@ export const usePlaylistStore = create<PlaylistState>()(
                          console.log(`[Store] Restored queue to original playlist order. Current index set to ${newCurrentQueueIndex}.`);
                      } else {
                           console.warn(`[Store] Could not find current song ID ${currentSong.id} in original playlist ${originalPlaylistId}. Cannot restore order. Keeping shuffled queue.`);
-                          // Keep the currently shuffled queue as is, just turn off the flag
+                          // Keep the current queue order, just turn off the flag
                      }
                  } else {
-                     console.warn(`[Store] Could not find original playlist ${originalPlaylistId}. Cannot restore order. Keeping shuffled queue.`);
-                     // Keep the currently shuffled queue as is, just turn off the flag
+                     console.warn(`[Store] Could not find original playlist ${originalPlaylistId} or it's empty. Cannot restore order. Keeping shuffled queue.`);
+                     // Keep the current queue order, just turn off the flag
                  }
              } else {
                   console.log("[Store] Current song has no playlist context. Cannot restore order automatically. Keeping shuffled queue.");
-                  // Keep the currently shuffled queue as is, just turn off the flag
+                  // Keep the current queue order, just turn off the flag
              }
         }
 
@@ -708,7 +722,9 @@ export const usePlaylistStore = create<PlaylistState>()(
       setCurrentSongDuration: (duration) => set((state) => {
          const currentSong = state.queue[state.currentQueueIndex];
          if (currentSong && duration !== state.currentSongDuration) {
-             return { currentSongDuration: duration > 0 ? duration : 0 };
+             // Reset progress if duration becomes 0 (e.g., on song change before new duration arrives)
+             const newProgress = duration > 0 ? state.currentSongProgress : 0;
+             return { currentSongDuration: duration > 0 ? duration : 0, currentSongProgress: newProgress };
          }
          return {};
       }),
@@ -794,7 +810,7 @@ export const usePlaylistStore = create<PlaylistState>()(
             queue: newQueue,
             currentQueueIndex: newCurrentQueueIndex,
             isPlaying: newIsPlaying,
-            // Reset progress/duration only if stopping playback
+            // Reset progress/duration only if stopping playback or if the current song was removed
             currentSongProgress: newIsPlaying ? (removedSongIndex === state.currentQueueIndex ? 0 : state.currentSongProgress) : 0,
             currentSongDuration: newIsPlaying ? (removedSongIndex === state.currentQueueIndex ? 0 : state.currentSongDuration) : 0,
          };
@@ -841,6 +857,10 @@ export const usePlaylistStore = create<PlaylistState>()(
          if (index < 0 || index >= state.queue.length) {
               console.error(`[Store] Invalid queue index: ${index}. Queue length: ${state.queue.length}`);
               return {};
+         }
+         if (index === state.currentQueueIndex && state.isPlaying) {
+             console.log("[Store] Already playing this song. No change.");
+             return {}; // Already playing this index
          }
 
            const targetSong = state.queue[index];
