@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -36,7 +35,7 @@ export function Sidebar({
   playlists,
   selectedPlaylistId,
   onSelectPlaylist,
-}: SidebarProps) { // <<< Potential missing closing brace was here
+}: SidebarProps) {
   const { createPlaylist, deletePlaylist } = usePlaylistStore((state) => ({
      createPlaylist: state.createPlaylist,
      deletePlaylist: state.deletePlaylist, // Get delete action
@@ -70,7 +69,8 @@ export function Sidebar({
     }
   };
 
-  return ( // Ensure this return statement wraps the main JSX
+  // Ensure this return statement wraps the main JSX
+  return (
     <aside className="w-64 flex-shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground p-3 flex flex-col h-full max-h-dvh"> {/* Use dVH */}
       {/* App Title */}
       <div className="flex items-center gap-2 px-3 pt-2 pb-4 mb-1 select-none"> {/* Added select-none */}
