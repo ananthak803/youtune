@@ -205,9 +205,10 @@ export function Player() {
     }, [playNextSong, hasMounted]);
 
 
+  // Called when user starts dragging the slider thumb
   const handleSeekMouseDown = (e: React.PointerEvent<HTMLDivElement>) => {
      if (!currentSong) return;
-     console.log("[Player Seek] Mouse Down");
+     console.log("[Player Seek] Pointer Down");
      setSeeking(true);
      // Initialize local seek value with current progress
      setSeekValue(currentSongProgress);
@@ -219,11 +220,11 @@ export function Player() {
      setSeekValue(value[0]);
   };
 
-  // Finalize seek on mouse up
-  const handleSeekMouseUp = (value: number[]) => {
+  // Finalize seek on pointer up (replaces mouse up)
+  const handleSeekPointerUp = (value: number[]) => {
     if (!currentSong || !hasMounted || !seeking) return; // Ensure we are actually seeking
     const finalSeekTime = value[0];
-    console.log(`[Player Seek] Mouse Up. Seeking to: ${finalSeekTime}`);
+    console.log(`[Player Seek] Pointer Up. Seeking to: ${finalSeekTime}`);
 
     // Seek the actual player
     if (playerRef.current) {
@@ -232,10 +233,12 @@ export function Player() {
     // Update the global progress state
     setCurrentSongProgress(finalSeekTime);
 
-    // Reset seeking state
-    setSeeking(false);
-    setSeekValue(null); // Clear local seek value
-    console.log("[Player Seek] Finished seek.");
+    // Reset seeking state AFTER a short delay to prevent immediate re-triggering of progress updates
+     setTimeout(() => {
+        setSeeking(false);
+        setSeekValue(null); // Clear local seek value
+        console.log("[Player Seek] Finished seek, reset seeking state.");
+     }, 50); // Short delay
   };
 
 
@@ -328,7 +331,7 @@ export function Player() {
       )}
       <div className="flex items-center justify-between gap-4">
         {/* Song Info */}
-        <div className="flex items-center gap-3 w-1/4 lg:w-1/3 min-w-0">
+        <div className="flex items-center gap-3 w-1/4 lg:w-1/3 min-w-0 select-none"> {/* Added select-none */}
           {currentSong ? (
             <>
               <Image
@@ -341,13 +344,13 @@ export function Player() {
                 unoptimized // Added for ytimg URLs if not in next.config.js
                 onError={(e) => { e.currentTarget.src = '/placeholder-album.svg'; }}
               />
-              <div className="overflow-hidden select-none"> {/* Added select-none here */}
+              <div className="overflow-hidden"> {/* Removed select-none here */}
                 <p className="font-semibold truncate text-sm leading-tight">{currentSong.title || 'Unknown Title'}</p>
                 <p className="text-xs text-muted-foreground truncate">{currentSong.author || 'Unknown Artist'}</p>
               </div>
             </>
           ) : (
-             <div className="flex items-center gap-3 opacity-50 select-none"> {/* Added select-none here */}
+             <div className="flex items-center gap-3 opacity-50"> {/* Removed select-none here */}
               <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music text-muted-foreground"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
               </div>
@@ -439,8 +442,8 @@ export function Player() {
                 "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
                 // Range styling (filled part)
                 "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
-                // Thumb styles: Always visible if song exists, small size, scales up on hover/seek
-                "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Smaller base size
+                // Thumb styles: Use direct size and border-radius for a circle
+                "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Base size, circular
                 "[&>button]:opacity-0", // Initially hidden
                 "[&>button]:transition-all [&>button]:duration-150",
                 currentSong && "[&>button]:opacity-100", // Visible if song playing
@@ -450,7 +453,7 @@ export function Player() {
                 )}
               onValueChange={handleSeekChange} // Changed to update local state only
               onPointerDown={handleSeekMouseDown}
-              onPointerUp={handleSeekMouseUp} // Finalize seek on pointer up
+              onPointerUp={handleSeekPointerUp} // Use pointer up for touch/mouse
               disabled={!currentSong || !currentSongDuration}
               aria-label="Song progress"
             />
@@ -510,8 +513,8 @@ export function Player() {
                  "[&>span:first-child]:bg-secondary [&>span:first-child]:h-full",
                  // Range styling (filled part)
                  "[&>span:first-child>span]:bg-primary group-hover:[&>span:first-child>span]:bg-accent [&>span:first-child>span]:h-full",
-                 // Thumb styles: Always visible, small size, scales up on hover/drag
-                 "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Smaller base size
+                 // Thumb styles: Always visible, circular, scales up on hover/drag
+                 "[&>button]:h-3 [&>button]:w-3 [&>button]:bg-foreground [&>button]:border-0 [&>button]:rounded-full", // Base size, circular
                  "[&>button]:opacity-100", // Always visible
                  "[&>button]:transition-transform [&>button]:duration-150", // Smooth transition
                  "hover:[&>button]:scale-125", // Scale up on hover over the slider area
