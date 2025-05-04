@@ -23,7 +23,7 @@ import {
   DialogClose,
  } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { Plus, ListMusic, Search, Settings, ListOrdered, Youtube, Link as LinkIcon, Share2 } from 'lucide-react';
+import { Plus, ListMusic, Search, Settings, ListOrdered, Youtube, Link as LinkIcon } from 'lucide-react'; // Removed Share2
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
@@ -57,26 +57,7 @@ export default function Home() {
      }
   };
 
-  const handleSharePlaylist = (playlist: Playlist | null) => {
-      if (!playlist) return;
-      const playlistUrl = `${window.location.origin}/playlist/${playlist.id}`; // Basic share URL structure
-      navigator.clipboard.writeText(playlistUrl)
-        .then(() => {
-          toast({
-            title: "Link Copied!",
-            description: `Link to playlist "${playlist.name}" copied to clipboard.`,
-          });
-        })
-        .catch(err => {
-          console.error('Failed to copy playlist link: ', err);
-           toast({
-             title: "Copy Failed",
-             description: "Could not copy the link to your clipboard.",
-             variant: "destructive",
-           });
-        });
-    };
-
+  // Removed handleSharePlaylist function
 
   return (
     <TooltipProvider>
@@ -85,15 +66,9 @@ export default function Home() {
         {isMobile && (
           <header className="flex items-center justify-between p-3 border-b bg-card sticky top-0 z-20">
               <h1 className="text-xl font-bold text-primary">YouTune</h1>
-               <Button
-                   variant="ghost"
-                   size="icon"
-                   onClick={() => handleSharePlaylist(selectedPlaylistForView)}
-                   disabled={!selectedPlaylistForView}
-                   aria-label="Share current playlist"
-                 >
-                   <Share2 className="h-5 w-5" />
-                 </Button>
+              {/* Removed Share Button from Mobile Header */}
+              {/* Spacer to keep title centered if needed, or remove if layout adjusts */}
+              <div className="w-10 h-10"></div> {/* Placeholder for balance if needed */}
           </header>
         )}
 
@@ -182,29 +157,7 @@ export default function Home() {
                 {selectedPlaylistForView ? (
                   <>
                       <Separator className="my-6" />
-                      {/* Share Button - Desktop */}
-                      {!isMobile && (
-                        <div className="flex justify-end mb-4">
-                            <Tooltip>
-                               <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleSharePlaylist(selectedPlaylistForView)}
-                                    disabled={!selectedPlaylistForView}
-                                    className="flex items-center gap-2"
-                                    aria-label="Share playlist"
-                                  >
-                                    <Share2 className="h-4 w-4" />
-                                    Share
-                                  </Button>
-                               </TooltipTrigger>
-                               <TooltipContent>
-                                   <p>Copy link to this playlist</p>
-                               </TooltipContent>
-                            </Tooltip>
-                        </div>
-                      )}
+                      {/* Removed Share Button - Desktop */}
                       <PlaylistView playlist={selectedPlaylistForView} />
                   </>
                 ) : (
@@ -286,8 +239,11 @@ export default function Home() {
                <SheetContent side="right" className="w-full max-w-md p-0 flex flex-col">
                  <SheetHeader className="p-4 border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                    <SheetTitle>Playback Queue</SheetTitle>
+                   {/* Adding Description for Accessibility */}
+                   <SheetDescription className="sr-only">
+                     View and manage the upcoming songs in your playback queue.
+                   </SheetDescription>
                  </SheetHeader>
-                 <h2 className="sr-only">Playback Queue</h2>
                  <QueueView />
                </SheetContent>
              </Sheet>
