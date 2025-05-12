@@ -60,13 +60,13 @@ export default function Home() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-dvh flex-col bg-background text-foreground overflow-hidden"> {/* Use dvh for dynamic viewport height */}
+      <div className="flex h-dvh flex-col bg-background text-foreground overflow-hidden select-none"> {/* Use dvh for dynamic viewport height */}
         {/* Header for Mobile */}
         {isMobile && (
-          <header className="flex items-center justify-between p-3 border-b bg-card sticky top-0 z-20 select-none"> {/* Added select-none */}
-              <h1 className="text-xl font-bold text-primary">YouTune</h1>
-              {/* Spacer to keep title centered if needed, or remove if layout adjusts */}
-              <div className="w-10 h-10"></div> {/* Placeholder for balance if needed */}
+          <header className="flex items-center justify-between p-3 border-b bg-card sticky top-0 z-20"> {/* Added select-none */}
+              <div className="w-10 h-10"></div> {/* Placeholder for balance for left icon */}
+              <h1 className="text-xl font-bold text-primary text-center">YouTune</h1>
+              <div className="w-10 h-10"></div> {/* Placeholder for balance for right icon */}
           </header>
         )}
 
@@ -160,7 +160,7 @@ export default function Home() {
                 ) : (
                   <>
                        <Separator className="my-6" />
-                       <div className="flex h-[50vh] items-center justify-center text-muted-foreground text-center px-4 select-none"> {/* Added select-none */}
+                       <div className="flex h-[50vh] items-center justify-center text-muted-foreground text-center px-4"> {/* Added select-none */}
                            <p>Select or create a playlist to get started.</p>
                        </div>
                    </>
@@ -175,7 +175,7 @@ export default function Home() {
 
         {/* Mobile Bottom Navigation */}
         {isMobile && (
-          <nav className="flex justify-around items-center p-2 border-t bg-card sticky bottom-0 z-20 select-none"> {/* Added select-none */}
+          <nav className="flex justify-around items-center p-2 border-t bg-card sticky bottom-0 z-20"> {/* Added select-none */}
             {/* Playlists Sheet Trigger */}
             <Sheet open={isPlaylistSheetOpen} onOpenChange={setIsPlaylistSheetOpen}>
               <SheetTrigger asChild>
@@ -184,7 +184,13 @@ export default function Home() {
                   Playlists
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-4/5 max-w-xs p-0">
+              <SheetContent side="left" className="w-4/5 max-w-xs p-0 flex flex-col">
+                 <SheetHeader className="p-4 border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+                    <SheetTitle>Your Playlists</SheetTitle>
+                    <SheetDescription className="sr-only">
+                        Manage and select your playlists. This sheet contains your list of playlists and options to create new ones.
+                    </SheetDescription>
+                 </SheetHeader>
                 <Sidebar
                   playlists={playlists}
                   selectedPlaylistId={activePlaylistId}
@@ -250,5 +256,3 @@ export default function Home() {
     </TooltipProvider>
   );
 }
-
-    
