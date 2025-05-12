@@ -273,7 +273,7 @@ export function Player() {
 
 
   return (
-    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-4 sticky bottom-0 z-50 select-none">
+    <footer className="border-t border-border bg-card/95 backdrop-blur-sm p-3 sm:p-4 sticky bottom-0 z-50 select-none">
       {/* ReactPlayer hidden */}
       {hasMounted && currentSong?.url && (
         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
@@ -300,16 +300,16 @@ export function Player() {
             />
         </div>
       )}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-center sm:items-center justify-between gap-x-4 gap-y-3">
         {/* Song Info */}
-        <div className="flex items-center gap-3 w-1/4 lg:w-1/3 min-w-0">
+        <div className="flex items-center gap-3 w-full sm:w-1/3 min-w-0">
           {currentSong ? (
             <>
               <Image
                 src={currentSong.thumbnailUrl || '/placeholder-album.svg'}
                 alt={currentSong.title || 'Album Art'}
-                width={56}
-                height={56}
+                width={48} // Slightly smaller for mobile-first approach
+                height={48}
                 className="rounded-md flex-shrink-0 aspect-square object-cover"
                 data-ai-hint="music album cover"
                 unoptimized // Avoids optimization issues with external URLs
@@ -322,7 +322,7 @@ export function Player() {
             </>
           ) : (
              <div className="flex items-center gap-3 opacity-50">
-              <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+              <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-music text-muted-foreground"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
               </div>
               <div className="overflow-hidden">
@@ -334,8 +334,8 @@ export function Player() {
         </div>
 
         {/* Player Controls */}
-        <div className="flex flex-col items-center gap-1 w-1/2 lg:w-1/3">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex flex-col items-center gap-1 w-full sm:flex-1">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -392,20 +392,18 @@ export function Player() {
                 {getLoopIcon()}
              </Button>
           </div>
-           <div className="flex w-full max-w-xl items-center gap-2 px-2">
+           <div className="flex w-full max-w-xs sm:max-w-sm md:max-w-md items-center gap-2 px-2">
              <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">
                {formatTime(displayProgress)}
              </span>
-             {/* Wrap Slider to handle pointer events */}
              <div className="flex-1" onPointerDownCapture={handlePointerDown}>
                  <Slider
                    value={[displayProgress]}
-                   max={Math.max(displayDuration, 1)} // Ensure max is at least 1 to prevent errors
-                   step={0.1} // Smaller step for smoother seeking
+                   max={Math.max(displayDuration, 1)} 
+                   step={0.1} 
                    className={cn("w-full", !currentSong && "opacity-50")}
-                   onValueChange={handleValueChange} // Update visual state during drag
-                   onValueCommit={handleValueCommit} // Update actual player on release
-                   // onPointerDown is now handled by the wrapper div
+                   onValueChange={handleValueChange} 
+                   onValueCommit={handleValueCommit} 
                    disabled={!currentSong || !currentSongDuration}
                    aria-label="Song progress"
                  />
@@ -417,7 +415,7 @@ export function Player() {
         </div>
 
         {/* Volume & Queue Controls */}
-        <div className="flex items-center justify-end gap-3 w-1/4 lg:w-1/3">
+        <div className="flex items-center justify-end gap-2 w-full sm:w-1/3">
             {/* Queue Button */}
             <Sheet open={isQueueSheetOpen} onOpenChange={setIsQueueSheetOpen}>
               <SheetTrigger asChild>
@@ -426,7 +424,7 @@ export function Player() {
                     size="icon"
                     className={cn(
                       "h-8 w-8 text-muted-foreground hover:text-foreground transition-colors",
-                      queue.length > 0 && "text-accent" // Highlight if queue has items
+                      queue.length > 0 && "text-accent" 
                     )}
                     aria-label="Show queue"
                   >
@@ -445,7 +443,7 @@ export function Player() {
             </Sheet>
 
             {/* Volume Controls */}
-          <div className="flex items-center gap-2 w-28">
+          <div className="flex items-center gap-2 w-full max-w-[120px] sm:max-w-[150px]">
               <Button
                 variant="ghost"
                 size="icon"
